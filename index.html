@@ -629,7 +629,52 @@
 </div>
 <!-- ========== END PAYROLL MODULE ========== -->
 
+<!-- ========== LETTERS & TEMPLATES MODULE (PART 7) ========== -->
+<div id="lettersView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Letters & Templates</div>
+        <div class="mini muted">Offer, Appointment, Experience, Relieving, Salary Certificates, Hike letters — editable templates</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn primary" onclick="letters_openCreate()">New Letter (Single)</button>
+        <button class="btn ghost" onclick="letters_openBulk()">Bulk Generate</button>
+        <button class="btn ghost" onclick="letters_exportHistory()">Export History</button>
+        <button class="btn ghost" onclick="letters_openTemplateManager()">Manage Templates</button>
+      </div>
+    </div>
 
+    <!-- Search / Filters -->
+    <div style="margin-top:12px; display:flex;gap:8px;align-items:center;">
+      <input id="lettersSearch" class="field small" placeholder="Search letters or employee..." oninput="letters_renderHistory()" />
+      <select id="lettersFilterType" class="field small" onchange="letters_renderHistory()">
+        <option value="">All Types</option>
+      </select>
+      <select id="lettersFilterEmp" class="field small" onchange="letters_renderHistory()">
+        <option value="">All Employees</option>
+      </select>
+      <div style="margin-left:auto" class="mini muted">Total: <strong id="lettersTotal">0</strong></div>
+    </div>
+
+    <!-- History -->
+    <div style="margin-top:12px;" class="section">
+      <div style="font-weight:800">Generated Letters</div>
+      <div style="margin-top:8px; overflow:auto; max-height:420px;">
+        <table>
+          <thead><tr><th>Type</th><th>Employee</th><th>Date</th><th>Template</th><th>Actions</th></tr></thead>
+          <tbody id="lettersHistoryBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ========== END LETTERS MODULE ========== -->
+
+
+
+
+      
       <!-- Documents placeholder -->
       <div id="documentsView" style="display:none;">
         <div class="section">
@@ -646,13 +691,7 @@
         </div>
       </div>
 
-      <!-- Letters placeholder -->
-      <div id="lettersView" style="display:none;">
-        <div class="section">
-          <div class="section-title">Letters & Templates</div>
-          <div class="mini muted">Offer/hike/experience etc. will be included in Part 7</div>
-        </div>
-      </div>
+    
 
       <!-- Reports placeholder -->
       <div id="reportsView" style="display:none;">
@@ -3212,7 +3251,546 @@ window.cand_exportExcel = cand_exportExcel;
 /* ===========================
    END PART 6
    =========================== */
-  
+ /* ===========================
+   PART 7: Letters & Templates Module
+   - Offer/Appointment/Experience/Relieving/Salary/Hike/Promotion/Termination
+   - Template editor, single & bulk generation, history tracking
+   - Dependencies: STORE, saveStore(), uid(), emp_find(), logActivity(), escapeHtml(), html2canvas, jspdf, XLSX, fileToBase64()
+   =========================== */
+
+(function(){
+  // Default templates (admin-editable). Placeholders: {{name}}, {{code}}, {{designation}}, {{department}}, {{doj}}, {{salary_monthly}}, {{salary_annual}}, {{joining_date}}, {{last_working_date}}, {{manager}}, {{company_name}}, {{date}}, {{address}}
+  if(!STORE.templates) {
+    STORE.templates = {
+      'appointment': {
+        title: 'Appointment / Joining Letter',
+        description: 'Formal appointment letter when employee joins.',
+        body: `Date: {{date}}
+
+To,
+{{name}}
+{{address}}
+
+Subject: Appointment as {{designation}}
+
+Dear {{name}},
+
+We are pleased to confirm your appointment as {{designation}} with Konarak Food & Beverages. Your employee code is {{code}}. Your date of joining will be {{doj}}.
+
+Compensation: Your gross monthly salary will be ₹{{salary_monthly}} (annual ₹{{salary_annual}}). Your probation period will be 3 months. Please report to {{manager}} at {{branch}}.
+
+Sincerely,
+Konarak Food & Beverages`
+      },
+      'experience': {
+        title: 'Experience Letter',
+        description: 'Issued on exit, confirms service period and role.',
+        body: `Date: {{date}}
+
+To Whom It May Concern,
+
+This is to certify that {{name}} (Employee Code: {{code}}) was employed with Konarak Food & Beverages as {{designation}} in the {{department}} department from {{doj}} to {{last_working_date}}.
+
+During the tenure, {{name}} displayed satisfactory performance. We wish them success in future endeavors.
+
+Sincerely,
+HR - Konarak Food & Beverages`
+      },
+      'relieving': {
+        title: 'Relieving Letter',
+        description: 'Confirms employee relieved from duties.',
+        body: `Date: {{date}}
+
+To,
+{{name}}
+{{address}}
+
+Subject: Relieving Letter
+
+Dear {{name}},
+
+This is to confirm that you have been relieved from your duties at Konarak Food & Beverages with effect from {{last_working_date}}. All dues have been settled as per company records.
+
+We wish you success in your future endeavors.
+
+Regards,
+HR Team`
+      },
+      'salary_cert': {
+        title: 'Salary Certificate',
+        description: 'Official salary certificate for bank/loan purposes.',
+        body: `Date: {{date}}
+
+To Whom It May Concern,
+
+This is to certify that Mr./Ms. {{name}} (Employee Code: {{code}}) is working with Konarak Food & Beverages as {{designation}} in {{department}} since {{doj}}. The current gross salary is ₹{{salary_monthly}} per month (₹{{salary_annual}} per annum).
+
+This certificate is issued upon request for verification purposes.
+
+Sincerely,
+HR Team`
+      },
+      'hike': {
+        title: 'Hike / Increment Letter',
+        description: 'Notifies employee of salary increase.',
+        body: `Date: {{date}}
+
+Dear {{name}},
+
+We are pleased to inform you that your salary has been revised effective {{date}}. Your new gross monthly salary will be ₹{{salary_monthly}} (annual ₹{{salary_annual}}). This change is due to performance and business factors.
+
+New designation (if applicable): {{designation}}
+
+Regards,
+HR`
+      },
+      'promotion': {
+        title: 'Promotion Letter',
+        description: 'Promotion confirmation with new designation.',
+        body: `Date: {{date}}
+
+Dear {{name}},
+
+Congratulations. You are promoted to the position of {{designation}} effective from {{date}}. Your new salary will be ₹{{salary_monthly}} per month.
+
+Regards,
+HR`
+      },
+      'termination': {
+        title: 'Termination Notice',
+        description: 'Termination/notice letter (basic).',
+        body: `Date: {{date}}
+
+To,
+{{name}}
+
+Subject: Termination of employment
+
+Dear {{name}},
+
+This letter is to inform you that your employment with Konarak Food & Beverages will be terminated effective {{last_working_date}}. Please clear all company property before your exit.
+
+Regards,
+HR`
+      }
+    };
+    saveStore();
+  }
+
+  /* -------------------------
+     Helper: build placeholder map from employee
+     ------------------------- */
+  function letters_buildPlaceholders(emp){
+    const placeholders = {};
+    placeholders['name'] = emp.fullname || `${emp.email||''}`;
+    placeholders['code'] = emp.code || '';
+    placeholders['designation'] = emp.designation || '';
+    placeholders['department'] = emp.department || '';
+    placeholders['doj'] = emp.doj || '';
+    placeholders['salary_monthly'] = Number(emp.basic||0) + Number(emp.hra||0) + Number(emp.convey||0) + Number(emp.special||0);
+    placeholders['salary_annual'] = Math.round(placeholders['salary_monthly'] * 12);
+    placeholders['joining_date'] = emp.doj || '';
+    placeholders['last_working_date'] = emp.lastWorkingDate || '';
+    placeholders['manager'] = emp.manager || '';
+    placeholders['company_name'] = 'Konarak Food & Beverages';
+    placeholders['date'] = new Date().toLocaleDateString();
+    placeholders['address'] = emp.present_address || emp.permanent_address || '';
+    placeholders['branch'] = emp.location || '';
+    return placeholders;
+  }
+
+  /* -------------------------
+     Render template with placeholders
+     ------------------------- */
+  function letters_renderTemplateText(templateKey, emp){
+    const tmpl = STORE.templates[templateKey];
+    if(!tmpl) return 'Template not found';
+    let body = tmpl.body || '';
+    const ph = letters_buildPlaceholders(emp || {});
+    Object.keys(ph).forEach(k => {
+      const re = new RegExp(`{{\\s*${k}\\s*}}`, 'g');
+      body = body.replace(re, escapeHtml(String(ph[k] || '')));
+    });
+    return body;
+  }
+
+  /* -------------------------
+     UI: Open single letter creation modal
+     ------------------------- */
+  function letters_openCreate(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    // build employee dropdown
+    const empOptions = (STORE.employees||[]).map(e => `<option value="${e.id}">${escapeHtml(e.fullname)} (${escapeHtml(e.code||'')})</option>`).join('');
+    const templateOptions = Object.keys(STORE.templates).map(k => `<option value="${k}">${escapeHtml(STORE.templates[k].title)}</option>`).join('');
+    const modal = document.createElement('div'); modal.className = 'modal-backdrop';
+    modal.innerHTML = `<div class="modal" style="width:760px;max-width:96vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Generate Letter</div><div><button class="btn ghost" id="lettersCreateClose">Close</button></div></div>
+      <div style="margin-top:8px;">
+        <div class="mini muted">Employee</div>
+        <select id="letters_emp" class="field small"><option value="">-- Select Employee --</option>${empOptions}</select>
+        <div style="margin-top:8px;" class="mini muted">Template</div>
+        <select id="letters_template" class="field small">${templateOptions}</select>
+        <div style="margin-top:8px;" class="mini muted">Preview</div>
+        <textarea id="letters_preview" class="field" rows="8" readonly></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn primary" id="lettersGenerateBtn">Generate & Download PDF</button>
+          <button class="btn ghost" id="lettersSaveHistory">Generate & Save to History</button>
+          <button class="btn ghost" id="lettersPreviewBtn">Refresh Preview</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('lettersCreateClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('lettersPreviewBtn').addEventListener('click', ()=> {
+      const empId = document.getElementById('letters_emp').value;
+      const templ = document.getElementById('letters_template').value;
+      const emp = emp_find(empId) || {};
+      document.getElementById('letters_preview').value = letters_renderTemplateText(templ, emp);
+    });
+    document.getElementById('lettersGenerateBtn').addEventListener('click', async ()=>{
+      const empId = document.getElementById('letters_emp').value;
+      const templ = document.getElementById('letters_template').value;
+      if(!empId) return alert('Select employee');
+      if(!templ) return alert('Select template');
+      const emp = emp_find(empId);
+      const text = letters_renderTemplateText(templ, emp);
+      // produce PDF
+      await letters_generatePdfFromText(templ, emp, text);
+      logActivity(`Letter generated: ${templ} for ${emp.fullname}`);
+    });
+    document.getElementById('lettersSaveHistory').addEventListener('click', async ()=>{
+      const empId = document.getElementById('letters_emp').value;
+      const templ = document.getElementById('letters_template').value;
+      if(!empId) return alert('Select employee');
+      if(!templ) return alert('Select template');
+      const emp = emp_find(empId);
+      const text = letters_renderTemplateText(templ, emp);
+      // save entry to history with PDF dataURI
+      const pdfData = await letters_htmlToPdfDataUrl(templ, emp, text);
+      const hist = { id: uid('letter'), template: templ, templateTitle: STORE.templates[templ].title, employeeId: empId, employeeName: emp.fullname, date: new Date().toISOString(), pdf: pdfData };
+      STORE.lettersHistory = STORE.lettersHistory || [];
+      STORE.lettersHistory.push(hist);
+      saveStore();
+      letters_renderHistory();
+      alert('Letter generated and saved to history');
+      logActivity(`Letter saved to history: ${templ} for ${emp.fullname}`);
+    });
+  }
+
+  /* -------------------------
+     Convert HTML/text to printable node then to PDF dataURL
+     ------------------------- */
+  async function letters_htmlToPdfDataUrl(templKey, emp, text){
+    const htmlNode = document.createElement('div');
+    htmlNode.style.width='800px'; htmlNode.style.padding='18px'; htmlNode.style.background='#fff'; htmlNode.style.color='#000';
+    htmlNode.innerHTML = `<div style="display:flex;gap:12px;align-items:center;">
+      <img src="logo.png" style="width:90px;height:90px;object-fit:contain" onerror="this.style.display='none'">
+      <div><div style="font-weight:900;font-size:20px">${escapeHtml(STORE.templates[templKey].title)}</div><div style="font-size:12px;color:#666">${escapeHtml(STORE.templates[templKey].description || '')}</div></div>
+    </div><hr style="margin:8px 0;border:none;border-top:1px solid #ddd"><pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(text)}</pre>`;
+    document.body.appendChild(htmlNode);
+    const canvas = await html2canvas(htmlNode, { scale: 2 });
+    const img = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const imgW = pageW - 40;
+    pdf.addImage(img, 'PNG', 20, 20, imgW, 0);
+    document.body.removeChild(htmlNode);
+    return pdf.output('datauristring');
+  }
+
+  async function letters_generatePdfFromText(templKey, emp, text){
+    const dataUri = await letters_htmlToPdfDataUrl(templKey, emp, text);
+    // trigger download
+    const a = document.createElement('a');
+    a.href = dataUri;
+    const fname = `${templKey}_${(emp.code||emp.id||'EMP')}_${new Date().toISOString().slice(0,10)}.pdf`.replace(/\s+/g,'_');
+    a.download = fname;
+    a.click();
+  }
+
+  /* -------------------------
+     History rendering & actions
+     ------------------------- */
+  function letters_renderHistory(){
+    const body = document.getElementById('lettersHistoryBody');
+    if(!body) return;
+    body.innerHTML = '';
+    STORE.lettersHistory = STORE.lettersHistory || [];
+    // filters
+    const q = (document.getElementById('lettersSearch').value || '').trim().toLowerCase();
+    const typeFilter = (document.getElementById('lettersFilterType').value || '');
+    const empFilter = (document.getElementById('lettersFilterEmp').value || '');
+    let list = (STORE.lettersHistory||[]).slice().reverse();
+    if(q) list = list.filter(h => (h.employeeName||'').toLowerCase().includes(q) || (h.template||'').toLowerCase().includes(q));
+    if(typeFilter) list = list.filter(h => h.template === typeFilter);
+    if(empFilter) list = list.filter(h => h.employeeId === empFilter);
+    list.forEach(h => {
+      body.insertAdjacentHTML('beforeend', `<tr>
+        <td>${escapeHtml(h.templateTitle || h.template)}</td>
+        <td>${escapeHtml(h.employeeName || '')}</td>
+        <td>${new Date(h.date).toLocaleString()}</td>
+        <td>${escapeHtml(h.template)}</td>
+        <td>
+          <button class="btn ghost" onclick="letters_download('${h.id}')">Download</button>
+          <button class="btn ghost" onclick="letters_view('${h.id}')">View</button>
+          <button class="btn ghost" onclick="letters_removeHistory('${h.id}')">Delete</button>
+        </td>
+      </tr>`);
+    });
+    document.getElementById('lettersTotal').innerText = (STORE.lettersHistory||[]).length;
+    // populate filters
+    const tsel = document.getElementById('lettersFilterType');
+    if(tsel) tsel.innerHTML = '<option value="">All Types</option>' + Object.keys(STORE.templates).map(k => `<option value="${k}">${escapeHtml(STORE.templates[k].title)}</option>`).join('');
+    const esel = document.getElementById('lettersFilterEmp');
+    if(esel) esel.innerHTML = '<option value="">All Employees</option>' + (STORE.employees||[]).map(e=>`<option value="${e.id}">${escapeHtml(e.fullname)} (${escapeHtml(e.code||'')})</option>`).join('');
+  }
+
+  function letters_download(id){
+    const rec = (STORE.lettersHistory||[]).find(x=>x.id===id);
+    if(!rec) return alert('Not found');
+    const a = document.createElement('a');
+    a.href = rec.pdf;
+    a.download = `${rec.template}_${rec.employeeName}_${rec.date.slice(0,10)}.pdf`.replace(/\s+/g,'_');
+    a.click();
+  }
+
+  function letters_view(id){
+    const rec = (STORE.lettersHistory||[]).find(x=>x.id===id);
+    if(!rec) return alert('Not found');
+    const w = window.open('');
+    w.document.write(`<iframe src="${rec.pdf}" style="width:100%;height:100vh;border:none"></iframe>`);
+  }
+
+  function letters_removeHistory(id){
+    if(!confirm('Delete letter from history?')) return;
+    STORE.lettersHistory = (STORE.lettersHistory||[]).filter(x=>x.id!==id);
+    saveStore();
+    letters_renderHistory();
+    logActivity(`Letter history removed: ${id}`);
+  }
+
+  /* -------------------------
+     Template manager (admin) — edit templates
+     ------------------------- */
+  function letters_openTemplateManager(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const modal = document.createElement('div'); modal.className = 'modal-backdrop';
+    const rows = Object.keys(STORE.templates).map(k => {
+      const t = STORE.templates[k];
+      return `<div style="border-bottom:1px solid rgba(255,255,255,0.02);padding:8px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:800">${escapeHtml(t.title)}</div><div><button class="btn ghost" onclick="letters_editTemplate('${k}')">Edit</button></div></div>
+        <div class="mini muted">${escapeHtml(t.description)}</div>
+      </div>`;
+    }).join('');
+    modal.innerHTML = `<div class="modal" style="width:760px;max-width:96vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Template Manager</div><div><button class="btn ghost" id="tmplClose">Close</button></div></div>
+      <div style="margin-top:8px;">${rows}</div>
+      <div style="margin-top:8px;display:flex;gap:8px;">
+        <input id="new_t_key" placeholder="new_key" class="field small" />
+        <input id="new_t_title" placeholder="Title" class="field small" />
+        <input id="new_t_desc" placeholder="Short description" class="field small" />
+        <button class="btn primary" id="new_t_add">Add Template</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('tmplClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('new_t_add').addEventListener('click', ()=>{
+      const key = (document.getElementById('new_t_key').value || '').trim();
+      const title = (document.getElementById('new_t_title').value || '').trim();
+      const desc = (document.getElementById('new_t_desc').value || '').trim();
+      if(!key || !title) return alert('Provide key and title');
+      if(STORE.templates[key]) return alert('Template key exists');
+      STORE.templates[key] = { title, description: desc, body: `Date: {{date}}\n\nDear {{name}},\n\n<content>\n\nRegards,` };
+      saveStore();
+      modal.remove();
+      letters_openTemplateManager();
+    });
+  }
+
+  function letters_editTemplate(key){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const t = STORE.templates[key];
+    if(!t) return alert('Template not found');
+    const modal = document.createElement('div'); modal.className='modal-backdrop';
+    modal.innerHTML = `<div class="modal" style="width:760px;max-width:96vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Edit Template — ${escapeHtml(t.title)}</div><div><button class="btn ghost" id="tmplEditClose">Close</button></div></div>
+      <div style="margin-top:8px;">
+        <div class="mini muted">Title</div>
+        <input id="tmpl_title" class="field small" value="${escapeHtml(t.title)}" />
+        <div class="mini muted" style="margin-top:8px">Description</div>
+        <input id="tmpl_desc" class="field small" value="${escapeHtml(t.description||'')}" />
+        <div class="mini muted" style="margin-top:8px">Body</div>
+        <textarea id="tmpl_body" class="field" rows="12">${escapeHtml(t.body||'')}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn primary" id="tmplSave">Save</button>
+          <button class="btn ghost" id="tmplCancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('tmplEditClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('tmplCancel').addEventListener('click', ()=> modal.remove());
+    document.getElementById('tmplSave').addEventListener('click', ()=>{
+      t.title = document.getElementById('tmpl_title').value || t.title;
+      t.description = document.getElementById('tmpl_desc').value || t.description;
+      t.body = document.getElementById('tmpl_body').value || t.body;
+      STORE.templates[key] = t;
+      saveStore();
+      alert('Template saved');
+      modal.remove();
+      letters_openTemplateManager();
+    });
+  }
+
+  /* -------------------------
+     Bulk generation: choose employees + template
+     ------------------------- */
+  function letters_openBulk(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const employeesHtml = (STORE.employees||[]).map(e=>`<div style="display:flex;gap:8px;align-items:center;padding:4px 0"><input type="checkbox" class="letters_bulk_cb" value="${e.id}" /> ${escapeHtml(e.fullname)} (${escapeHtml(e.code||'')})</div>`).join('');
+    const templateOptions = Object.keys(STORE.templates).map(k => `<option value="${k}">${escapeHtml(STORE.templates[k].title)}</option>`).join('');
+    const modal = document.createElement('div'); modal.className='modal-backdrop';
+    modal.innerHTML = `<div class="modal" style="width:760px;max-width:96vw;max-height:90vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Bulk Generate Letters</div><div><button class="btn ghost" id="bulkClose">Close</button></div></div>
+      <div style="margin-top:8px;">
+        <div class="mini muted">Template</div>
+        <select id="bulk_template" class="field small">${templateOptions}</select>
+        <div style="margin-top:8px" class="mini muted">Select Employees</div>
+        <div style="max-height:300px;overflow:auto;border:1px solid rgba(255,255,255,0.03);padding:8px;">${employeesHtml}</div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn primary" id="bulkGenerate">Generate for Selected</button>
+          <button class="btn ghost" id="bulkGenerateAll">Generate for All</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('bulkClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('bulkGenerate').addEventListener('click', async ()=>{
+      const templ = document.getElementById('bulk_template').value;
+      if(!templ) return alert('Select template');
+      const checks = Array.from(document.querySelectorAll('.letters_bulk_cb')).filter(ch=>ch.checked).map(ch=>ch.value);
+      if(checks.length === 0) return alert('Select employees');
+      // sequentially generate and save to history
+      for(const empId of checks){
+        const emp = emp_find(empId);
+        const text = letters_renderTemplateText(templ, emp);
+        const pdfData = await letters_htmlToPdfDataUrl(templ, emp, text);
+        STORE.lettersHistory = STORE.lettersHistory || [];
+        STORE.lettersHistory.push({ id: uid('letter'), template: templ, templateTitle: STORE.templates[templ].title, employeeId: empId, employeeName: emp.fullname, date: new Date().toISOString(), pdf: pdfData });
+      }
+      saveStore();
+      letters_renderHistory();
+      alert(`Generated letters for ${checks.length} employee(s).`);
+      logActivity(`Bulk generated ${checks.length} letters of type ${templ}`);
+    });
+    document.getElementById('bulkGenerateAll').addEventListener('click', async ()=>{
+      const templ = document.getElementById('bulk_template').value;
+      if(!templ) return alert('Select template');
+      const all = (STORE.employees||[]).map(e=>e.id);
+      for(const empId of all){
+        const emp = emp_find(empId);
+        const text = letters_renderTemplateText(templ, emp);
+        const pdfData = await letters_htmlToPdfDataUrl(templ, emp, text);
+        STORE.lettersHistory = STORE.lettersHistory || [];
+        STORE.lettersHistory.push({ id: uid('letter'), template: templ, templateTitle: STORE.templates[templ].title, employeeId: empId, employeeName: emp.fullname, date: new Date().toISOString(), pdf: pdfData });
+      }
+      saveStore();
+      letters_renderHistory();
+      alert(`Generated letters for ${all.length} employee(s).`);
+      logActivity(`Bulk generated all letters of type ${templ}`);
+    });
+  }
+
+  /* -------------------------
+     Export history to Excel
+     ------------------------- */
+  function letters_exportHistory(){
+    const rows = (STORE.lettersHistory||[]).map(h => ({ Template: h.templateTitle || h.template, Employee: h.employeeName, Date: h.date }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'LettersHistory');
+    XLSX.writeFile(wb, 'Letters_History.xlsx');
+  }
+
+  /* -------------------------
+     Generate single HTML employee login page with employee details (for upload to employee folder)
+     Returns generated file blob URL or triggers download
+     ------------------------- */
+  function letters_generateEmployeeHtml(empId){
+    const emp = emp_find(empId);
+    if(!emp) return alert('Employee not found');
+    // simple standalone HTML that reads basic info and shows profile. This file includes embedded JSON for the employee.
+    const content = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>${emp.fullname} — Profile</title>
+<style>
+  body{font-family:Segoe UI,Arial,Helvetica,sans-serif;padding:18px;background:#f6f8fb;color:#111}
+  .card{max-width:720px;margin:20px auto;background:#fff;padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  img{max-width:140px;border-radius:6px}
+  .muted{color:#666;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div style="display:flex;gap:12px;align-items:center">
+      <img src="${emp.photo || ''}" onerror="this.style.display='none'"/>
+      <div>
+        <h2 style="margin:0">${emp.fullname}</h2>
+        <div class="muted">${emp.designation} • ${emp.department}</div>
+        <div class="muted">Employee Code: ${emp.code}</div>
+        <div style="margin-top:8px"><strong>Email:</strong> ${emp.email} • <strong>Phone:</strong> ${emp.phone}</div>
+      </div>
+    </div>
+    <hr/>
+    <div><strong>Joining Date:</strong> ${emp.doj || ''}</div>
+    <div><strong>Bank:</strong> ${emp.bank || ''} • <strong>A/C:</strong> ${emp.account || ''}</div>
+    <div style="margin-top:8px"><strong>Address:</strong> ${escapeHtml(emp.present_address || '')}</div>
+  </div>
+  <!-- Embedded employee JSON for further client-side use -->
+  <script>window.EMPLOYEE = ${JSON.stringify(emp)};</script>
+</body>
+</html>`;
+    // download as file
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fname = `${emp.code || emp.id}_profile.html`;
+    a.href = url; a.download = fname; a.click();
+    URL.revokeObjectURL(url);
+    logActivity(`Employee HTML generated: ${fname}`);
+  }
+
+  /* -------------------------
+     Initialization & hooks
+     ------------------------- */
+  // ensure history array
+  STORE.lettersHistory = STORE.lettersHistory || [];
+  // expose
+  window.letters_openCreate = letters_openCreate;
+  window.letters_openBulk = letters_openBulk;
+  window.letters_renderHistory = letters_renderHistory;
+  window.letters_download = letters_download;
+  window.letters_view = letters_view;
+  window.letters_removeHistory = letters_removeHistory;
+  window.letters_openTemplateManager = letters_openTemplateManager;
+  window.letters_generateEmployeeHtml = letters_generateEmployeeHtml;
+  window.letters_exportHistory = letters_exportHistory;
+  // hook route to render when view is opened
+  const prevRouteLetters = route;
+  route = function(v){
+    prevRouteLetters(v);
+    try{ if(v === 'letters') letters_renderHistory(); }catch(e){ console.error('letters route err', e); }
+  };
+  // initial population if visible now
+  if(document.getElementById('lettersView') && document.getElementById('lettersView').style.display !== 'none'){
+    letters_renderHistory();
+  }
+}());
+/* ===========================
+   END PART 7
+   =========================== */
+ 
 
 /* ===========================
    End of Part 1 core file
