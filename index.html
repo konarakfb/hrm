@@ -1,1402 +1,679 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Konarak HRMS — SuccessFactors Style (Front-end Demo)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Konarak Food & Beverages — HRMS (Frontend Demo)</title>
 
-<!-- Minimal external libs -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- External libraries for later parts (SheetJS, html2canvas, jsPDF will be used later) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-<style>
-/* ====== Your original visual language adapted ====== */
+  <style>
+    /* ---------- CORE THEME (dark-first) ---------- */
+    :root{
+      --bg-1: #071026; --bg-2: #0b1830;
+      --header: #061426; --card: #071133; --muted: #99a7c0; --accent: #0ea5e9;
+      --accent-strong: #00bfff; --text: #e6eef8;
+      --danger: #ef4444;
+      --glass: rgba(255,255,255,0.02);
+    }
+    [data-theme="light"]{
+      --bg-1:#eef2f3; --bg-2:#d9e4f5; --header:#1f2937; --card:#fff; --muted:#6b7280; --accent:#2563eb; --text:#0f172a; --glass: rgba(0,0,0,0.03);
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      background: linear-gradient(135deg,var(--bg-1),var(--bg-2));
+      color:var(--text); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
 
-/* RESET */
-* { margin:0; padding:0; box-sizing:border-box; }
+    /* Header */
+    .header{
+      height:64px; background:var(--header); color:var(--text);
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 20px; box-shadow: 0 6px 22px rgba(0,0,0,0.45); position:sticky; top:0; z-index:60;
+    }
+    .logo-row{display:flex;gap:12px;align-items:center;}
+    .logo-image{width:44px;height:44px;object-fit:contain;border-radius:8px;background:var(--glass);padding:6px;}
+    .app-title{font-weight:800;font-size:18px;}
+    .header-right{display:flex;gap:12px;align-items:center;}
 
-:root{
-  --bg1: #eef2f3; --bg2:#d9e4f5;
-  --header:#1f2937; --card-bg:white; --muted:#6b7280; --accent:#22c1ee;
-  --success:#10b981;
-}
+    .menu-icon{font-size:26px;cursor:pointer; user-select:none;}
 
-[data-theme="dark"] {
-  --bg1:#071026; --bg2:#0b1830; --header:#0b1220; --card-bg:#071133; --muted:#98a6c0; --accent:#7c3aed; --success:#22c1ee;
-  color: #e6eef8;
-}
+    /* Side menu */
+    .side-menu{
+      position:fixed; top:0; left:-320px; width:320px; height:100vh; padding-top:64px;
+      background: linear-gradient(180deg, rgba(2,6,23,0.95), rgba(6,10,30,0.95));
+      color:var(--muted); transition: left 220ms ease; z-index:70; overflow:auto;
+    }
+    .side-menu a{display:block;padding:14px 20px;color:var(--muted);text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.02);}
+    .side-menu a:hover{background:rgba(255,255,255,0.02); color:var(--text);}
 
-body {
-  font-family: "Segoe UI", Arial, sans-serif;
-  background: linear-gradient(135deg,var(--bg1),var(--bg2));
-  color: #0f172a;
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-  min-height:100vh;
-}
+    .menu-backdrop{display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:65;}
 
-/* HEADER */
-.header {
-  height: 64px;
-  background: var(--header);
-  color: white;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 20px;
-  font-size:20px;
-  font-weight:700;
-  position:sticky;
-  top:0;
-  z-index:50;
-  box-shadow: 0 6px 18px rgba(2,6,23,0.35);
-}
+    /* App area */
+    .app{ padding:28px; margin-left:0; transition: margin-left 220ms ease; min-height:calc(100vh - 64px); }
+    .container{ max-width:1180px; margin:0 auto; }
 
-/* SIDE MENU */
-.menu-icon { font-size:28px; cursor:pointer; user-select:none; }
+    /* Card grid (home) */
+    .grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:22px; margin-top:12px; }
 
-.side-menu {
-  position: fixed;
-  top: 0;
-  left: -280px;
-  width: 280px;
-  height: 100%;
-  background: #0b1220;
-  padding-top:64px;
-  transition: 220ms ease;
-  z-index:80;
-  color: #cbd5e1;
-  overflow:auto;
-}
-.side-menu a { display:block; padding:14px 18px; font-size:16px; color:var(--muted); text-decoration:none; border-bottom:1px solid rgba(255,255,255,0.02); }
-.side-menu a:hover { background: rgba(255,255,255,0.02); color:#fff; }
+    .card{
+      background:var(--card); border-radius:14px; padding:26px 18px; text-align:center; box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+      cursor:pointer; transition: transform 180ms ease, box-shadow 180ms ease; overflow:hidden; position:relative;
+    }
+    .card:hover{ transform:translateY(-6px); box-shadow: 0 18px 40px rgba(0,0,0,0.28); }
+    .card .icon{ width:56px;height:56px;margin:0 auto 12px; opacity:0.95; filter:brightness(1.1); }
+    .card .label{ font-weight:800; font-size:16px; color:var(--text); }
 
-.menu-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:70; }
+    /* sections + forms */
+    .section{ background:var(--card); border-radius:12px; padding:18px; margin-bottom:18px; box-shadow: 0 8px 18px rgba(0,0,0,0.12); }
+    .section-title{ font-weight:800; font-size:16px; margin-bottom:6px; color:var(--accent-strong); }
+    .row{ display:flex; gap:12px; align-items:center; }
+    .col{ flex:1; }
 
-/* MAIN LAYOUT */
-.app {
-  padding: 28px;
-  transition: margin-left 220ms ease;
-  margin-left: 0;
-}
-@media(min-width:1100px){
-  .app { margin-left: 0; padding:36px; }
-}
+    .field{ width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:transparent; color:var(--text); }
+    .field.small{ padding:8px; font-size:13px; }
 
-/* GRID CARDS (home) */
-.grid {
-  display:grid;
-  grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
-  gap:22px;
-}
+    .btn{ padding:10px 14px; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
+    .btn.primary{ background:var(--accent-strong); color:#002033; }
+    .btn.ghost{ background:transparent; color:var(--text); border:1px solid rgba(255,255,255,0.04); }
 
-/* CARD */
-.card {
-  background: var(--card-bg);
-  border-radius:16px;
-  padding:26px 18px;
-  text-align:center;
-  box-shadow: 0 12px 24px rgba(2,6,23,0.12);
-  cursor:pointer;
-  position:relative;
-  overflow:hidden;
-  transition: transform 200ms ease, box-shadow 200ms ease;
-}
-.card:hover{ transform:translateY(-6px); box-shadow: 0 20px 38px rgba(2,6,23,0.18); }
-.card .icon{ width:56px; height:56px; margin: 0 auto 12px; display:block; }
+    table{ width:100%; border-collapse:collapse; margin-top:8px; }
+    th,td{ text-align:left; padding:10px; border-bottom:1px solid rgba(255,255,255,0.03); font-size:13px; color:var(--text); }
+    th{ font-weight:700; color:white; background:linear-gradient(90deg, rgba(10,20,40,0.95), rgba(5,15,30,0.9)); }
 
-/* page sections */
-.section {
-  background: var(--card-bg);
-  border-radius:12px;
-  padding:18px;
-  box-shadow: 0 8px 20px rgba(2,6,23,0.08);
-  margin-bottom:18px;
-}
+    .muted{ color:var(--muted); font-size:13px; }
+    .mini{ font-size:12px; color:var(--muted); }
 
-/* forms */
-.form-row { display:flex; gap:12px; margin-bottom:12px; }
-.form-row .col { flex:1; }
-.field { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6e9ef; background:transparent; color:inherit; }
-.field.small { padding:8px; font-size:13px; }
+    /* login modal */
+    .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:120; }
+    .modal{ width:420px; background:var(--card); border-radius:12px; padding:18px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
 
-/* table */
-.table { width:100%; border-collapse:collapse; }
-.table th, .table td { text-align:left; padding:10px; border-bottom:1px solid rgba(2,6,23,0.06); font-size:14px; }
-.table th { background: linear-gradient(90deg,#0f172a,#243b55); color:white; font-weight:700; }
+    /* responsive */
+    @media(max-width:900px){ .row{ flex-direction:column; } .side-menu{ width:260px; } }
 
-/* utilities */
-.row { display:flex; gap:12px; align-items:center; }
-.col { flex:1; }
-.hint { font-size:13px; color:var(--muted); }
-.small { font-size:13px; color:var(--muted); }
-.btn { padding:10px 14px; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
-.btn.primary { background:var(--accent); color:white; }
-.btn.ghost { background:transparent; border:1px solid rgba(0,0,0,0.06); }
-.kpi { font-size:20px; font-weight:800; }
-
-/* responsive */
-@media(max-width:900px){
-  .form-row { flex-direction:column; }
-}
-.footer { margin-top:20px; font-size:13px; color:var(--muted); }
-
-/* small visual helpers */
-.badge { background:#0ea5e9; color:white; padding:6px 8px; border-radius:8px; font-weight:700; display:inline-block; font-size:13px; }
-.tag { background:#eef2f3; padding:4px 8px; border-radius:6px; font-size:13px; color:#0f172a; }
-
-</style>
+  </style>
 </head>
-<body data-theme="light">
+<body data-theme="dark">
 
-<!-- HEADER -->
-<div class="header">
-  <div>Konarak HRMS — SuccessFactors Style (Frontend Demo)</div>
-  <div style="display:flex;gap:12px;align-items:center">
-    <div class="small" id="userStatus">Local Demo</div>
-    <div class="menu-icon" onclick="toggleMenu()">☰</div>
-  </div>
-</div>
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-row">
+      <img src="logo.png" alt="Konarak Logo" class="logo-image" onerror="this.style.display='none'">
+      <div>
+        <div class="app-title">Konarak Food & Beverages — HRMS (Frontend)</div>
+        <div class="mini muted">Local demo — secure your production deployment</div>
+      </div>
+    </div>
 
-<!-- SIDE MENU -->
-<div id="sideMenu" class="side-menu" aria-hidden="true">
-  <a href="#" onclick="nav('home')">Home</a>
-  <a href="#" onclick="nav('dashboard')">Dashboard</a>
-  <a href="#" onclick="nav('employees')">Employee Central</a>
-  <a href="#" onclick="nav('attendance')">Attendance</a>
-  <a href="#" onclick="nav('leave')">Leave Management</a>
-  <a href="#" onclick="nav('payroll')">Payroll</a>
-  <a href="#" onclick="nav('documents')">Documents</a>
-  <a href="#" onclick="nav('recruitment')">Recruitment</a>
-  <a href="#" onclick="nav('performance')">Performance</a>
-  <a href="#" onclick="nav('reports')">Reports & Exports</a>
-  <a href="#" onclick="nav('settings')">Settings</a>
-</div>
-<div id="menuBackdrop" class="menu-backdrop" onclick="toggleMenu()"></div>
-
-<!-- APP CONTAINER -->
-<div id="app" class="app">
-
-  <!-- HOME / CARD GRID -->
-  <div id="homeView">
-    <div class="grid">
-      <div class="card" onclick="nav('dashboard')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/overview-pages-1.png" alt="">
-        <div class="label">Dashboard</div>
-      </div>
-      <div class="card" onclick="nav('employees')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/user-group-man-man.png" alt="">
-        <div class="label">Employee Central</div>
-      </div>
-      <div class="card" onclick="nav('attendance')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/clock.png" alt="">
-        <div class="label">Attendance</div>
-      </div>
-      <div class="card" onclick="nav('leave')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/calendar.png" alt="">
-        <div class="label">Leave</div>
-      </div>
-      <div class="card" onclick="nav('payroll')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/money-bag.png" alt="">
-        <div class="label">Payroll</div>
-      </div>
-      <div class="card" onclick="nav('documents')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/document.png" alt="">
-        <div class="label">Documents</div>
-      </div>
-      <div class="card" onclick="nav('recruitment')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/resume.png" alt="">
-        <div class="label">Recruitment</div>
-      </div>
-      <div class="card" onclick="nav('performance')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/medal.png" alt="">
-        <div class="label">Performance</div>
-      </div>
-      <div class="card" onclick="nav('reports')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/combo-chart--v1.png" alt="">
-        <div class="label">Reports & Exports</div>
-      </div>
-      <div class="card" onclick="nav('settings')">
-        <img class="icon" src="https://img.icons8.com/ios-filled/100/000000/settings--v1.png" alt="">
-        <div class="label">Settings</div>
-      </div>
+    <div class="header-right">
+      <div class="muted" id="headerUser">Not signed in</div>
+      <div class="menu-icon" onclick="toggleMenu()">☰</div>
     </div>
   </div>
 
-  <!-- DASHBOARD VIEW -->
-  <div id="dashboardView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:20px;font-weight:800">Dashboard</div>
-          <div class="small">Quick summary and KPIs</div>
-        </div>
-        <div>
-          <button class="btn ghost" onclick="renderDashboard()">Refresh</button>
-        </div>
-      </div>
+  <!-- SIDE MENU -->
+  <nav id="sideMenu" class="side-menu" aria-hidden="true">
+    <a href="#" onclick="route('home')">Home</a>
+    <a href="#" onclick="route('dashboard')">Dashboard</a>
+    <a href="#" onclick="route('employees')">Employee Central</a>
+    <a href="#" onclick="route('recruitment')">Recruitment</a>
+    <a href="#" onclick="route('attendance')">Attendance</a>
+    <a href="#" onclick="route('leave')">Leave Management</a>
+    <a href="#" onclick="route('payroll')">Payroll</a>
+    <a href="#" onclick="route('documents')">Documents</a>
+    <a href="#" onclick="route('performance')">Performance</a>
+    <a href="#" onclick="route('idcards')">ID Cards</a>
+    <a href="#" onclick="route('letters')">Letters & Templates</a>
+    <a href="#" onclick="route('reports')">Reports</a>
+    <a href="#" onclick="route('settings')">Settings</a>
+    <hr style="border:none;height:1px;background:rgba(255,255,255,0.02);margin:8px 0;">
+    <a href="#" onclick="signOut()">Sign out</a>
+  </nav>
+  <div id="menuBackdrop" class="menu-backdrop" onclick="toggleMenu()"></div>
 
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-top:14px;">
-        <div class="section">
-          <div class="small">Total employees</div>
-          <div class="kpi" id="kpiEmployees">0</div>
-        </div>
-        <div class="section">
-          <div class="small">Attendance logs</div>
-          <div class="kpi" id="kpiAttendance">0</div>
-        </div>
-        <div class="section">
-          <div class="small">Pending leaves</div>
-          <div class="kpi" id="kpiLeaves">0</div>
-        </div>
-        <div class="section">
-          <div class="small">Payroll runs</div>
-          <div class="kpi" id="kpiPayrolls">0</div>
-        </div>
-      </div>
+  <!-- APP -->
+  <div class="app">
+    <div class="container" id="appContainer">
 
-      <div style="display:grid;grid-template-columns:1fr 360px;gap:12px;margin-top:12px;">
-        <div class="section">
-          <div style="font-weight:700;margin-bottom:8px">Recent Activity</div>
-          <div id="recentActivity" class="small"></div>
+      <!-- HOME VIEW -->
+      <div id="homeView">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:20px;font-weight:800">Welcome to Konarak HRMS (Frontend)</div>
+            <div class="muted">Dark theme enabled. All data stored locally (localStorage).</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn ghost" onclick="openLogin()">Sign in</button>
+            <button class="btn ghost" onclick="downloadBackup()">Download Backup</button>
+            <label style="display:inline-block;">
+              <input type="file" id="uploadBackup" class="mini" style="display:none" onchange="importBackup(event)">
+              <button class="btn ghost" onclick="document.getElementById('uploadBackup').click()">Upload Backup</button>
+            </label>
+          </div>
         </div>
 
-        <div class="section">
-          <div style="font-weight:700;margin-bottom:8px">Quick Actions</div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <button class="btn primary" onclick="nav('employees')">Add Employee</button>
-            <button class="btn ghost" onclick="nav('attendance')">Open Attendance</button>
-            <button class="btn ghost" onclick="nav('payroll')">Run Payroll</button>
+        <div class="grid" style="margin-top:18px;">
+          <div class="card" onclick="route('dashboard')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/dashboard.png" alt="">
+            <div class="label">Dashboard</div>
+          </div>
+          <div class="card" onclick="route('employees')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/user-group-man-man.png" alt="">
+            <div class="label">Employee Central</div>
+          </div>
+          <div class="card" onclick="route('recruitment')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/resume.png" alt="">
+            <div class="label">Recruitment</div>
+          </div>
+          <div class="card" onclick="route('attendance')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/clock.png" alt="">
+            <div class="label">Attendance</div>
+          </div>
+          <div class="card" onclick="route('payroll')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/money-bag.png" alt="">
+            <div class="label">Payroll</div>
+          </div>
+          <div class="card" onclick="route('documents')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/document--v1.png" alt="">
+            <div class="label">Documents</div>
+          </div>
+          <div class="card" onclick="route('idcards')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/id-card.png" alt="">
+            <div class="label">ID Cards</div>
+          </div>
+          <div class="card" onclick="route('letters')">
+            <img class="icon" src="https://img.icons8.com/ios-filled/100/ffffff/new-post.png" alt="">
+            <div class="label">Letters & Templates</div>
           </div>
         </div>
       </div>
+
+      <!-- PLACEHOLDER VIEWS (will be replaced as part 2+) -->
+      <div id="dashboardView" class="section" style="display:none;">
+        <div class="section-title">Dashboard</div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col section">
+            <div class="mini">Total employees</div>
+            <div style="font-weight:900;font-size:22px;" id="kpiEmployees">0</div>
+            <div class="mini">Use Employee Central to add new employees</div>
+          </div>
+          <div class="col section">
+            <div class="mini">Pending leaves</div>
+            <div style="font-weight:900;font-size:22px;" id="kpiLeaves">0</div>
+            <div class="mini">Leave management will show approvals</div>
+          </div>
+          <div class="col section">
+            <div class="mini">Attendance logs</div>
+            <div style="font-weight:900;font-size:22px;" id="kpiAttendance">0</div>
+            <div class="mini">Attendance module will show IN/OUT</div>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;" id="recentActivity" class="small muted">No activity yet</div>
+      </div>
+
+      <!-- Employee central simple placeholder -->
+      <div id="employeesView" style="display:none;">
+        <div class="section">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div class="section-title">Employee Central</div>
+              <div class="mini muted">Complete employee master will be here (Part 2)</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn primary" onclick="route('recruitment')">Open Recruitment</button>
+            </div>
+          </div>
+          <div style="margin-top:12px;" id="empListPlaceholder" class="section">Employee list will appear here after Part 2 is added.</div>
+        </div>
+      </div>
+
+      <!-- Recruitment placeholder -->
+      <div id="recruitmentView" style="display:none;">
+        <div class="section">
+          <div class="section-title">Recruitment</div>
+          <div class="mini muted">Recruitment module coming next (Part 3)</div>
+        </div>
+      </div>
+
+      <!-- Attendance placeholder -->
+      <div id="attendanceView" style="display:none;">
+        <div class="section">
+          <div class="section-title">Attendance</div>
+          <div class="mini muted">Attendance module coming next (Part 4). Methods: Web IN/OUT + Auto + Manual</div>
+        </div>
+      </div>
+
+      <!-- Payroll placeholder -->
+      <div id="payrollView" style="display:none;">
+        <div class="section">
+          <div class="section-title">Payroll</div>
+          <div class="mini muted">Payroll module coming next (Part 6)</div>
+        </div>
+      </div>
+
+      <!-- Documents placeholder -->
+      <div id="documentsView" style="display:none;">
+        <div class="section">
+          <div class="section-title">Documents</div>
+          <div class="mini muted">Documents module coming next (Part 5)</div>
+        </div>
+      </div>
+
+      <!-- ID cards placeholder -->
+      <div id="idcardsView" style="display:none;">
+        <div class="section">
+          <div class="section-title">ID Cards</div>
+          <div class="mini muted">ID card generator coming in Part 8 (vertical premium design)</div>
+        </div>
+      </div>
+
+      <!-- Letters placeholder -->
+      <div id="lettersView" style="display:none;">
+        <div class="section">
+          <div class="section-title">Letters & Templates</div>
+          <div class="mini muted">Offer/hike/experience etc. will be included in Part 7</div>
+        </div>
+      </div>
+
+      <!-- Reports placeholder -->
+      <div id="reportsView" style="display:none;">
+        <div class="section">
+          <div class="section-title">Reports</div>
+          <div class="mini muted">Reports & exports in Part 9</div>
+        </div>
+      </div>
+
+      <!-- Settings placeholder -->
+      <div id="settingsView" style="display:none;">
+        <div class="section">
+          <div class="section-title">Settings</div>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <div>
+              <div class="mini muted">Theme</div>
+              <select id="themeSelect" class="field small" onchange="applyThemeLocal()">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="purple">Purple Accent</option>
+                <option value="blue">Blue Accent</option>
+              </select>
+            </div>
+            <div>
+              <div class="mini muted">Admin account</div>
+              <div class="mini">Admin: <strong>konarakfb@gmail.com</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- EMPLOYEE CENTRAL -->
-  <div id="employeesView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:800;font-size:18px">Employee Central</div>
-          <div class="small">Full employee master — create, edit, onboard</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn primary" onclick="openEmployeeForm()">+ New Employee</button>
-          <button class="btn ghost" onclick="exportEmployees()">Export</button>
-        </div>
+  <!-- LOGIN MODAL (reusable) -->
+  <div id="loginModal" style="display:none;" class="modal-backdrop">
+    <div class="modal">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:800">Sign in</div>
+        <div class="mini muted">Konarak HRMS</div>
       </div>
 
-      <!-- Add/Edit Form (collapsible) -->
-      <div id="empForm" class="section" style="margin-top:12px; display:none;">
-        <div style="font-weight:700" id="empFormTitle">New employee</div>
-        <div style="margin-top:10px"></div>
+      <div style="margin-top:12px;">
+        <div class="mini muted">Sign in as</div>
+        <select id="loginRole" class="field small" style="margin-top:6px;">
+          <option value="admin">Admin</option>
+          <option value="employee">Employee</option>
+        </select>
 
-        <div class="form-row">
-          <div class="col">
-            <input id="e_fullname" class="field" placeholder="Full name (required)">
-          </div>
-          <div class="col">
-            <input id="e_code" class="field" placeholder="Employee code (EMP...)">
-          </div>
+        <div id="adminLoginFields" style="margin-top:8px;">
+          <input id="adminEmail" class="field small" placeholder="Email" value="konarakfb@gmail.com">
+          <input id="adminPass" type="password" class="field small" placeholder="Password" value="Money@123">
         </div>
 
-        <div class="form-row">
-          <div class="col"><input id="e_email" class="field" placeholder="Email"></div>
-          <div class="col"><input id="e_phone" class="field" placeholder="Phone"></div>
-        </div>
-
-        <div class="form-row">
-          <div class="col"><input id="e_department" class="field" placeholder="Department"></div>
-          <div class="col"><input id="e_designation" class="field" placeholder="Designation"></div>
-        </div>
-
-        <div class="form-row">
-          <div class="col"><input id="e_doj" type="date" class="field"></div>
-          <div class="col"><input id="e_dob" type="date" class="field"></div>
-        </div>
-
-        <div class="form-row">
-          <div class="col"><input id="e_bank" class="field" placeholder="Bank account"></div>
-          <div class="col"><input id="e_ifsc" class="field" placeholder="IFSC"></div>
-        </div>
-
-        <div class="form-row">
-          <div class="col"><input id="e_basic" class="field" type="number" placeholder="Basic salary"></div>
-          <div class="col"><input id="e_hra" class="field" type="number" placeholder="HRA"></div>
-        </div>
-
-        <div class="form-row">
-          <div class="col">
-            <label class="small">Photo</label><input id="e_photo" type="file" class="field small" accept="image/*">
-          </div>
-          <div class="col">
-            <label class="small">Upload joining docs (pdf)</label><input id="e_docs" type="file" class="field small" accept=".pdf,.png,.jpg" multiple>
-          </div>
+        <div id="empLoginFields" style="display:none;margin-top:8px;">
+          <input id="empCode" class="field small" placeholder="Employee Code (e.g. EMP1001)">
+          <input id="empPass" type="password" class="field small" placeholder="Password">
         </div>
 
         <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn primary" onclick="saveEmployee()">Save</button>
-          <button class="btn ghost" onclick="cancelEmployeeForm()">Cancel</button>
+          <button class="btn primary" onclick="performLogin()">Sign in</button>
+          <button class="btn ghost" onclick="closeLogin()">Cancel</button>
         </div>
-      </div>
 
-      <!-- Employee List -->
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Employees</div>
-        <div style="overflow:auto">
-          <table class="table" id="empTable">
-            <thead>
-              <tr><th>Name</th><th>Code</th><th>Department</th><th>Designation</th><th>Phone</th><th>Salary</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="empTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ATTENDANCE -->
-  <div id="attendanceView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Attendance</div>
-          <div class="small">Mobile / Web IN-OUT with optional geolocation</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn primary" onclick="openAttendanceForm()">Mark IN/OUT</button>
-          <button class="btn ghost" onclick="exportAttendance()">Export</button>
-        </div>
-      </div>
-
-      <div id="attForm" class="section" style="display:none;margin-top:12px;">
-        <div style="font-weight:700">Mark attendance</div>
-        <div class="form-row" style="margin-top:8px;">
-          <div class="col">
-            <select id="att_employee" class="field">
-              <option value="">-- Select employee --</option>
-            </select>
-          </div>
-          <div style="width:160px">
-            <select id="att_type" class="field">
-              <option value="IN">IN</option>
-              <option value="OUT">OUT</option>
-            </select>
-          </div>
-        </div>
-        <div style="margin-top:8px" class="small">Optionally, allow browser to capture your geo-location for verification.</div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button class="btn primary" onclick="markAttendance()">Record</button>
-          <button class="btn ghost" onclick="closeAttendanceForm()">Cancel</button>
-        </div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Recent Attendance</div>
-        <div style="max-height:320px;overflow:auto;">
-          <table class="table">
-            <thead><tr><th>Time</th><th>Employee</th><th>Type</th><th>Location</th></tr></thead>
-            <tbody id="attTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- LEAVE -->
-  <div id="leaveView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Leave Management</div>
-          <div class="small">Apply, approve, tracking and balances</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn primary" onclick="openLeaveForm()">Apply Leave</button>
-          <button class="btn ghost" onclick="exportLeaves()">Export</button>
-        </div>
-      </div>
-
-      <div id="leaveForm" class="section" style="display:none;margin-top:12px;">
-        <div style="font-weight:700">New Leave Request</div>
-        <div class="form-row" style="margin-top:8px;">
-          <div class="col">
-            <select id="leave_employee" class="field"></select>
-          </div>
-          <div class="col">
-            <select id="leave_type" class="field">
-              <option>Casual</option><option>Sick</option><option>Paid</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="col"><input id="leave_from" type="date" class="field"></div>
-          <div class="col"><input id="leave_to" type="date" class="field"></div>
-        </div>
-        <div style="margin-top:8px"><textarea id="leave_reason" class="field" placeholder="Reason"></textarea></div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button class="btn primary" onclick="applyLeave()">Submit</button>
-          <button class="btn ghost" onclick="closeLeaveForm()">Cancel</button>
-        </div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Leave Requests</div>
-        <div style="max-height:320px;overflow:auto;">
-          <table class="table">
-            <thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody id="leaveTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- PAYROLL -->
-  <div id="payrollView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Payroll</div>
-          <div class="small">Salary components, payroll runs, payslip generator</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn primary" onclick="openPayrollForm()">New Payroll</button>
-          <button class="btn ghost" onclick="exportPayrolls()">Export</button>
-        </div>
-      </div>
-
-      <div id="payForm" class="section" style="display:none;margin-top:12px;">
-        <div style="font-weight:700">Generate Payroll</div>
-        <div class="form-row" style="margin-top:8px;">
-          <div class="col"><select id="pay_employee" class="field"></select></div>
-          <div style="width:160px"><input id="pay_month" type="month" class="field"></div>
-        </div>
-        <div class="form-row">
-          <div class="col"><input id="pay_ot" type="number" class="field" placeholder="Overtime hours"></div>
-          <div class="col"><input id="pay_other" type="number" class="field" placeholder="Other deductions"></div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button class="btn primary" onclick="generatePayroll()">Generate & Save Payslip</button>
-          <button class="btn ghost" onclick="closePayrollForm()">Cancel</button>
-        </div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Payroll Records</div>
-        <div style="max-height:320px;overflow:auto;">
-          <table class="table">
-            <thead><tr><th>Employee</th><th>Month</th><th>Gross</th><th>Net</th><th>Action</th></tr></thead>
-            <tbody id="payrollTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- DOCUMENTS -->
-  <div id="documentsView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Documents</div>
-          <div class="small">Upload and manage employee documents</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn primary" onclick="openDocForm()">Upload Document</button>
-          <button class="btn ghost" onclick="exportDocuments()">Export</button>
-        </div>
-      </div>
-
-      <div id="docForm" class="section" style="display:none;margin-top:12px;">
-        <div style="font-weight:700">Upload</div>
-        <div class="form-row" style="margin-top:8px;">
-          <div class="col"><select id="doc_emp" class="field"></select></div>
-          <div class="col"><input id="doc_type" class="field" placeholder="Document type (e.g., PAN, Offer)"></div>
-        </div>
-        <div style="margin-top:8px"><input id="doc_file" type="file" class="field"></div>
-        <div style="display:flex;gap:8px;margin-top:8px;">
-          <button class="btn primary" onclick="uploadDoc()">Upload</button>
-          <button class="btn ghost" onclick="closeDocForm()">Cancel</button>
-        </div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">All Documents</div>
-        <div style="max-height:320px;overflow:auto;">
-          <table class="table">
-            <thead><tr><th>Employee</th><th>Type</th><th>Uploaded</th><th>Action</th></tr></thead>
-            <tbody id="docTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- RECRUITMENT -->
-  <div id="recruitmentView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Recruitment</div>
-          <div class="small">Candidate tracking — source, status, hire</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn primary" onclick="openCandidateForm()">Add Candidate</button>
-          <button class="btn ghost" onclick="exportCandidates()">Export</button>
-        </div>
-      </div>
-
-      <div id="candForm" class="section" style="display:none;margin-top:12px;">
-        <div style="font-weight:700">New Candidate</div>
-        <div class="form-row" style="margin-top:8px;">
-          <div class="col"><input id="c_name" class="field" placeholder="Full name"></div>
-          <div class="col"><input id="c_email" class="field" placeholder="Email"></div>
-        </div>
-        <div class="form-row">
-          <div class="col"><input id="c_phone" class="field" placeholder="Phone"></div>
-          <div class="col"><input id="c_source" class="field" placeholder="Source (LinkedIn / Referral)"></div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn primary" onclick="saveCandidate()">Save</button><button class="btn ghost" onclick="closeCandidateForm()">Cancel</button></div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Candidates</div>
-        <div style="max-height:320px;overflow:auto;">
-          <table class="table">
-            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Source</th><th>Status</th><th>Action</th></tr></thead>
-            <tbody id="candTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- PERFORMANCE -->
-  <div id="performanceView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Performance</div>
-          <div class="small">Goals, ratings & appraisal history</div>
-        </div>
-        <div><button class="btn primary" onclick="openGoalForm()">New Goal</button></div>
-      </div>
-
-      <div id="goalForm" class="section" style="display:none;margin-top:12px;">
-        <div style="font-weight:700">Create Goal</div>
-        <div class="form-row" style="margin-top:8px;">
-          <div class="col"><select id="goal_emp" class="field"></select></div>
-          <div class="col"><input id="goal_title" class="field" placeholder="Goal title"></div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn primary" onclick="saveGoal()">Save</button><button class="btn ghost" onclick="closeGoalForm()">Cancel</button></div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Goals & Ratings</div>
-        <div style="max-height:320px;overflow:auto;">
-          <table class="table">
-            <thead><tr><th>Employee</th><th>Goal</th><th>Rating</th><th>Action</th></tr></thead>
-            <tbody id="goalsTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- REPORTS -->
-  <div id="reportsView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Reports & Exports</div>
-          <div class="small">Export Excel / PDF across modules</div>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn primary" onclick="exportAllExcel()">Export All Excel</button>
-          <button class="btn ghost" onclick="exportAllPdf()">Export All PDF</button>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;" class="section">
-        <div style="font-weight:700;margin-bottom:8px">Quick Reports</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
-          <div class="card" onclick="reportEmployeesByDept()">Employees by Department</div>
-          <div class="card" onclick="reportMonthlyAttendance()">Monthly Attendance Summary</div>
-          <div class="card" onclick="reportPayrollSummary()">Payroll Summary</div>
-          <div class="card" onclick="reportLeavesSummary()">Leaves Summary</div>
-        </div>
+        <div class="mini muted" style="margin-top:8px;">Admin credentials: konarakfb@gmail.com / Money@123</div>
       </div>
     </div>
   </div>
 
-  <!-- SETTINGS -->
-  <div id="settingsView" class="hidden">
-    <div class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:800;font-size:18px">Settings</div>
-          <div class="small">Theme, backup & restore, app controls</div>
-        </div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Theme</div>
-        <div style="display:flex;gap:8px;">
-          <select id="themeSelect" class="field small" onchange="applyTheme()">
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="purple">Purple</option>
-            <option value="blue">Blue</option>
-          </select>
-          <button class="btn ghost" onclick="toggleTheme()">Toggle</button>
-        </div>
-      </div>
-
-      <div class="section" style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px">Backup / Restore</div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn primary" onclick="downloadBackup()">Download JSON Backup</button>
-          <input id="uploadBackup" type="file" class="field small" onchange="importBackup(event)">
-          <button class="btn ghost" onclick="clearAllData()">Clear All Data</button>
-        </div>
-      </div>
-
-      <div class="footer">
-        <div>Konarak HRMS — Frontend demo modeled on SuccessFactors features. Local storage only.</div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- SCRIPTS: application logic using localStorage -->
 <script>
 /* ===========================
-   Simple frontend HRMS (localStorage)
-   Key: sf_demo_v1
+   Part 1: Core framework JS
+   STORE structure and helpers
    =========================== */
 
-const STORE_KEY = 'sf_demo_v1';
-let store = {
-  employees: [],       // {id,fullname,code,email,phone,dept,desig,doj,dob,bank,ifsc,basic,hra,photo,docs:[]}
-  attendance: [],      // {id,employeeId,time,type,lat,lng}
-  leaves: [],          // {id,employeeId,type,from,to,reason,status,appliedAt}
-  payroll: [],         // {id,employeeId,month,basic,gross,net,pdf}
-  documents: [],       // {id,employeeId,type,data,uploadedAt}
-  candidates: [],      // recruitment
-  goals: [],           // performance
-  meta: { theme:'light', createdAt: new Date().toISOString() }
+const STORE_KEY = 'konarak_sf_complete_v1';
+
+/* Default store template (safe seed) */
+const DEFAULT_STORE = {
+  meta: {
+    createdAt: new Date().toISOString(),
+    theme: 'dark',
+    admins: [
+      // seeded admin (your requested credentials)
+      { email: 'konarakfb@gmail.com', password: 'Money@123', name: 'Konarak Admin', role: 'superadmin' }
+    ]
+  },
+  employees: [],
+  candidates: [],
+  attendance: [],
+  leaves: [],
+  payroll: [],
+  documents: [],
+  goals: [],
+  logs: [] // activity logs
 };
 
-// load from storage
+let STORE = {};
+
+/* Utility: safe load/save */
 function loadStore(){
   try{
     const raw = localStorage.getItem(STORE_KEY);
-    if(raw){ store = JSON.parse(raw); }
-    // ensure keys
-    store.employees = store.employees || [];
-    store.attendance = store.attendance || [];
-    store.leaves = store.leaves || [];
-    store.payroll = store.payroll || [];
-    store.documents = store.documents || [];
-    store.candidates = store.candidates || [];
-    store.goals = store.goals || [];
-    store.meta = store.meta || {theme:'light'};
+    if(!raw){ STORE = DEFAULT_STORE; saveStore(); return; }
+    STORE = JSON.parse(raw);
+    // ensure keys exist
+    for(const k of Object.keys(DEFAULT_STORE)){
+      if(typeof STORE[k] === 'undefined') STORE[k] = DEFAULT_STORE[k];
+    }
   } catch(e){
-    console.error('load error', e);
+    console.error('loadStore error', e);
+    STORE = DEFAULT_STORE;
+    saveStore();
   }
 }
-function saveStore(){ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }
+function saveStore(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(STORE));
+}
 
-// init
+/* UID generator */
+function uid(prefix='id'){ return prefix + '_' + Math.random().toString(36).slice(2,9); }
+
+/* File to base64 helper (returns dataURL) */
+function fileToBase64(file){ return new Promise((res,rej)=>{ const fr = new FileReader(); fr.onload = ()=> res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); }); }
+
+/* Escape for HTML insertion */
+function escapeHtml(s){ if(!s && s!==0) return ''; return String(s).replace(/[&<>"'`=\/]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'})[c]; }); }
+
+/* Logging helper */
+function logActivity(text){
+  STORE.logs = STORE.logs || [];
+  STORE.logs.push({ text, time: new Date().toISOString() });
+  if(STORE.logs.length > 5000) STORE.logs.shift();
+  saveStore();
+}
+
+/* Initialize */
 loadStore();
+
+/* ===========================
+   Theme engine
+   =========================== */
+function applyThemeLocal(){
+  const sel = document.getElementById('themeSelect');
+  const val = sel ? sel.value : (STORE.meta && STORE.meta.theme ? STORE.meta.theme : 'dark');
+  if(val === 'light'){ document.body.setAttribute('data-theme','light'); STORE.meta.theme = 'light'; document.documentElement.style.setProperty('--accent-strong','#2563eb'); }
+  else if(val === 'purple'){ document.body.setAttribute('data-theme','dark'); STORE.meta.theme = 'purple'; document.documentElement.style.setProperty('--accent-strong','#7c3aed'); }
+  else if(val === 'blue'){ document.body.setAttribute('data-theme','dark'); STORE.meta.theme = 'blue'; document.documentElement.style.setProperty('--accent-strong','#0ea5e9'); }
+  else { document.body.setAttribute('data-theme','dark'); STORE.meta.theme = 'dark'; document.documentElement.style.setProperty('--accent-strong','#0ea5e9'); }
+  saveStore();
+}
+function applyThemeInitial(){
+  const t = (STORE.meta && STORE.meta.theme) || 'dark';
+  const sel = document.getElementById('themeSelect');
+  if(sel) sel.value = t;
+  applyThemeLocal();
+}
 applyThemeInitial();
 
 /* ===========================
-   Navigation & Menu
+   Navigation + menu
    =========================== */
 function toggleMenu(){
   const menu = document.getElementById('sideMenu');
   const backdrop = document.getElementById('menuBackdrop');
-  if(menu.style.left === '0px'){ menu.style.left='-280px'; backdrop.style.display='none'; }
-  else { menu.style.left='0px'; backdrop.style.display='block'; }
+  if(menu.style.left === '0px'){ menu.style.left = '-320px'; backdrop.style.display = 'none'; }
+  else { menu.style.left = '0px'; backdrop.style.display = 'block'; }
 }
-function nav(view){
-  // hide menu/backdrop on nav
-  document.getElementById('sideMenu').style.left='-280px';
-  document.getElementById('menuBackdrop').style.display='none';
-  // hide all views
-  document.querySelectorAll('#app > div').forEach(d => d.style.display = 'none');
-  // show target
-  switch(view){
-    case 'dashboard': document.getElementById('dashboardView').style.display='block'; renderDashboard(); break;
-    case 'employees': document.getElementById('employeesView').style.display='block'; renderEmployeesTable(); break;
-    case 'attendance': document.getElementById('attendanceView').style.display='block'; renderAttendance(); break;
-    case 'leave': document.getElementById('leaveView').style.display='block'; renderLeaves(); break;
-    case 'payroll': document.getElementById('payrollView').style.display='block'; renderPayrolls(); break;
-    case 'documents': document.getElementById('documentsView').style.display='block'; renderDocuments(); break;
-    case 'recruitment': document.getElementById('recruitmentView').style.display='block'; renderCandidates(); break;
-    case 'performance': document.getElementById('performanceView').style.display='block'; renderGoals(); break;
-    case 'reports': document.getElementById('reportsView').style.display='block'; break;
-    case 'settings': document.getElementById('settingsView').style.display='block'; break;
-    default: document.getElementById('homeView').style.display='block'; break;
-  }
-  // scroll to top
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-// start on home
-nav('home');
+function route(view){
+  // hide menu
+  document.getElementById('sideMenu').style.left = '-320px';
+  document.getElementById('menuBackdrop').style.display = 'none';
+  // hide all views inside appContainer (direct children)
+  const container = document.getElementById('appContainer');
+  Array.from(container.children).forEach(ch => ch.style.display = 'none');
 
-/* ===========================
-   Employee module
-   =========================== */
-function uid(prefix='id'){ return prefix+'_'+Math.random().toString(36).slice(2,9); }
-
-function openEmployeeForm(editId){
-  const form = document.getElementById('empForm');
-  form.style.display = 'block';
-  document.getElementById('empFormTitle').innerText = editId ? 'Edit Employee' : 'New employee';
-  // reset fields
-  document.getElementById('e_fullname').value = '';
-  document.getElementById('e_code').value = '';
-  document.getElementById('e_email').value = '';
-  document.getElementById('e_phone').value = '';
-  document.getElementById('e_department').value = '';
-  document.getElementById('e_designation').value = '';
-  document.getElementById('e_doj').value = '';
-  document.getElementById('e_dob').value = '';
-  document.getElementById('e_bank').value = '';
-  document.getElementById('e_ifsc').value = '';
-  document.getElementById('e_basic').value = '';
-  document.getElementById('e_hra').value = '';
-  document.getElementById('e_photo').value = '';
-  document.getElementById('e_docs').value = '';
-  if(editId){
-    const e = store.employees.find(x=>x.id===editId);
-    if(!e) return alert('Employee not found');
-    document.getElementById('e_fullname').value = e.fullname||'';
-    document.getElementById('e_code').value = e.code||'';
-    document.getElementById('e_email').value = e.email||'';
-    document.getElementById('e_phone').value = e.phone||'';
-    document.getElementById('e_department').value = e.department||'';
-    document.getElementById('e_designation').value = e.designation||'';
-    document.getElementById('e_doj').value = e.doj||'';
-    document.getElementById('e_dob').value = e.dob||'';
-    document.getElementById('e_bank').value = e.bank||'';
-    document.getElementById('e_ifsc').value = e.ifsc||'';
-    document.getElementById('e_basic').value = e.basic||'';
-    document.getElementById('e_hra').value = e.hra||'';
-    document.getElementById('saveEmployee').dataset.edit = editId;
-  } else {
-    document.getElementById('saveEmployee').removeAttribute('data-edit');
-  }
-  // scroll to form
-  form.scrollIntoView({behavior:'smooth'});
-}
-
-function cancelEmployeeForm(){ document.getElementById('empForm').style.display='none'; document.getElementById('saveEmployee').removeAttribute('data-edit'); }
-
-// save employee
-async function saveEmployee(){
-  // note: element id saveEmployee doesn't exist; using save button's inline onclick to call this
-  // we will obtain edit id from DOM dataset if present
-  const editId = document.getElementById('saveEmployee') ? document.getElementById('saveEmployee').dataset.edit : null;
-  // but our save button has inline onclick earlier; to simplify, we will grab dataset from form title, fallback to null
-  // Instead, read fields and create/update accordingly
-  const fullname = document.getElementById('e_fullname').value.trim();
-  if(!fullname) return alert('Full name required');
-  const obj = {
-    id: editId || uid('emp'),
-    fullname,
-    code: document.getElementById('e_code').value.trim() || ('EMP' + Math.floor(Math.random()*9000+100)),
-    email: document.getElementById('e_email').value.trim(),
-    phone: document.getElementById('e_phone').value.trim(),
-    department: document.getElementById('e_department').value.trim(),
-    designation: document.getElementById('e_designation').value.trim(),
-    doj: document.getElementById('e_doj').value,
-    dob: document.getElementById('e_dob').value,
-    bank: document.getElementById('e_bank').value.trim(),
-    ifsc: document.getElementById('e_ifsc').value.trim(),
-    basic: Number(document.getElementById('e_basic').value || 0),
-    hra: Number(document.getElementById('e_hra').value || 0),
-    photo: null,
-    docs: []
+  // map view to id
+  const map = {
+    home: 'homeView',
+    dashboard: 'dashboardView',
+    employees: 'employeesView',
+    recruitment: 'recruitmentView',
+    attendance: 'attendanceView',
+    leave: 'leaveView',
+    payroll: 'payrollView',
+    documents: 'documentsView',
+    performance: 'performanceView',
+    idcards: 'idcardsView',
+    letters: 'lettersView',
+    reports: 'reportsView',
+    settings: 'settingsView'
   };
-  // handle photo file
-  const photoInput = document.getElementById('e_photo');
-  if(photoInput && photoInput.files && photoInput.files[0]){
-    obj.photo = await fileToBase64(photoInput.files[0]);
-  }
-  // handle docs
-  const docsInput = document.getElementById('e_docs');
-  if(docsInput && docsInput.files && docsInput.files.length){
-    for(const f of docsInput.files){
-      const bin = await fileToBase64(f);
-      obj.docs.push({ id: uid('doc'), name: f.name, data: bin, uploadedAt: new Date().toISOString() });
-    }
-  }
-  // add or update
-  const existingIndex = store.employees.findIndex(x=>x.id===obj.id);
-  if(existingIndex > -1){
-    // merge existing docs/photo if not provided
-    const prev = store.employees[existingIndex];
-    obj.photo = obj.photo || prev.photo || null;
-    obj.docs = (prev.docs || []).concat(obj.docs || []);
-    store.employees[existingIndex] = {...prev, ...obj};
-  } else {
-    store.employees.push(obj);
-  }
-  saveStore();
-  renderEmployeesTable();
-  cancelEmployeeForm();
-  renderDashboard();
-  populateSelects();
-}
-
-// but we referenced "saveEmployee" via button, ensure global binding
-window.saveEmployee = saveEmployee;
-
-// render table
-function renderEmployeesTable(){
-  const tb = document.getElementById('empTableBody'); tb.innerHTML = '';
-  store.employees.forEach(e=>{
-    tb.innerHTML += `<tr>
-      <td>${escapeHtml(e.fullname)}</td>
-      <td>${escapeHtml(e.code)}</td>
-      <td>${escapeHtml(e.department||'')}</td>
-      <td>${escapeHtml(e.designation||'')}</td>
-      <td>${escapeHtml(e.phone||'')}</td>
-      <td>₹${(e.basic||0).toFixed(2)}</td>
-      <td>
-        <button class="btn ghost" onclick="viewEmployee('${e.id}')">View</button>
-        <button class="btn ghost" onclick="editEmployee('${e.id}')">Edit</button>
-        <button class="btn ghost" onclick="deleteEmployee('${e.id}')">Delete</button>
-      </td>
-    </tr>`;
-  });
-}
-
-// view details
-function viewEmployee(id){
-  const e = store.employees.find(x=>x.id===id);
-  if(!e) return alert('Not found');
-  // build modal
-  const modal = document.createElement('div');
-  modal.style.position='fixed'; modal.style.left='50%'; modal.style.top='50%'; modal.style.transform='translate(-50%,-50%)'; modal.style.zIndex=9999; modal.style.width='760px';
-  modal.className='card';
-  modal.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
-    <div style="font-weight:800">${escapeHtml(e.fullname)} (${escapeHtml(e.code)})</div>
-    <div><button class="btn ghost" id="closeEmpView">Close</button></div>
-  </div>
-  <div style="display:flex;gap:12px;margin-top:12px">
-    <div style="width:140px;height:140px;border-radius:8px;overflow:hidden;background:#f3f4f6">
-      ${e.photo ? `<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover">` : `<div style="padding:12px" class="small">No photo</div>`}
-    </div>
-    <div style="flex:1">
-      <div class="small"><strong>Email:</strong> ${escapeHtml(e.email||'')}</div>
-      <div class="small"><strong>Phone:</strong> ${escapeHtml(e.phone||'')}</div>
-      <div class="small"><strong>Dept:</strong> ${escapeHtml(e.department||'')}</div>
-      <div class="small"><strong>Desig:</strong> ${escapeHtml(e.designation||'')}</div>
-      <div class="small"><strong>Bank:</strong> ${escapeHtml(e.bank||'')} | IFSC: ${escapeHtml(e.ifsc||'')}</div>
-      <div style="margin-top:8px"><button class="btn primary" onclick="downloadEmployeeJson('${e.id}')">Download JSON</button></div>
-    </div>
-    <div style="width:200px">
-      <div class="small"><strong>Joining:</strong> ${escapeHtml(e.doj||'')}</div>
-      <div class="small"><strong>DOB:</strong> ${escapeHtml(e.dob||'')}</div>
-      <div style="margin-top:8px"><button class="btn ghost" onclick="openEmployeeDocs('${e.id}')">Open Documents</button></div>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-  document.getElementById('closeEmpView').addEventListener('click', ()=> modal.remove());
-}
-
-function editEmployee(id){ openEmployeeForm(id); // populate by altering save path: set dataset
-  // copy values into form
-  const e = store.employees.find(x=>x.id===id); if(!e) return;
-  document.getElementById('e_fullname').value = e.fullname || '';
-  document.getElementById('e_code').value = e.code || '';
-  document.getElementById('e_email').value = e.email || '';
-  document.getElementById('e_phone').value = e.phone || '';
-  document.getElementById('e_department').value = e.department || '';
-  document.getElementById('e_designation').value = e.designation || '';
-  document.getElementById('e_doj').value = e.doj || '';
-  document.getElementById('e_dob').value = e.dob || '';
-  document.getElementById('e_bank').value = e.bank || '';
-  document.getElementById('e_ifsc').value = e.ifsc || '';
-  document.getElementById('e_basic').value = e.basic || '';
-  document.getElementById('e_hra').value = e.hra || '';
-  // set edit id by temporarily attaching to form title (simpler)
-  document.getElementById('empFormTitle').dataset.edit = id;
-}
-function deleteEmployee(id){ if(!confirm('Delete employee?')) return; store.employees = store.employees.filter(x=>x.id!==id); // also remove attendance/leaves/payroll refs optionally
-  store.attendance = store.attendance.filter(a=>a.employeeId!==id);
-  store.leaves = store.leaves.filter(l=>l.employeeId!==id);
-  store.payroll = store.payroll.filter(p=>p.employeeId!==id);
-  saveStore(); renderEmployeesTable(); renderDashboard(); populateSelects();
-}
-function downloadEmployeeJson(id){ const e = store.employees.find(x=>x.id===id); if(!e) return; const a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(e,null,2)); a.download = `${e.code||e.id}.json`; a.click(); }
-function openEmployeeDocs(id){
-  const emp = store.employees.find(x=>x.id===id); if(!emp) return alert('No employee');
-  if(!emp.docs || emp.docs.length===0) return alert('No documents for this employee');
-  // open first doc in a new tab if it's image/pdf, else show list
-  const list = emp.docs.map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.04)">${escapeHtml(d.name)} <button class="btn ghost" onclick="downloadData('${d.id}','${id}')">Download</button></div>`).join('');
-  const modal = document.createElement('div');
-  modal.style.position='fixed'; modal.style.left='50%'; modal.style.top='50%'; modal.style.transform='translate(-50%,-50%)'; modal.style.zIndex=9999; modal.style.width='640px';
-  modal.className='card';
-  modal.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800">Documents — ${escapeHtml(emp.fullname)}</div><div><button class="btn ghost" id="closeDocs">Close</button></div></div><div style="margin-top:12px">${list}</div>`;
-  document.body.appendChild(modal);
-  document.getElementById('closeDocs').addEventListener('click', ()=> modal.remove());
-}
-function downloadData(docId, empId){
-  const emp = store.employees.find(e=>e.id===empId);
-  if(!emp) return alert('Not found');
-  const d = (emp.docs||[]).find(x=>x.id===docId);
-  if(!d) return alert('Doc not found');
-  const a = document.createElement('a'); a.href = d.data; a.download = d.name; a.click();
+  const id = map[view] || 'homeView';
+  const el = document.getElementById(id);
+  if(el) el.style.display = 'block';
+  // call renderers for specific pages (if available)
+  try{ if(view === 'dashboard') renderDashboard(); if(view === 'employees') renderEmployeesShort(); } catch(e){ console.warn('route render error', e); }
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 /* ===========================
-   Attendance
+   AUTH: Login / session
+   - Front-end session only
+   - Admin and employee
    =========================== */
-function openAttendanceForm(){ document.getElementById('attForm').style.display='block'; populateSelects(); }
-function closeAttendanceForm(){ document.getElementById('attForm').style.display='none'; }
-async function markAttendance(){
-  const empId = document.getElementById('att_employee').value;
-  const type = document.getElementById('att_type').value;
-  if(!empId) return alert('Select employee');
-  // optional geolocation
-  let lat = null, lng = null;
-  if(navigator.geolocation){
-    try{
-      const pos = await new Promise((res,rej)=> navigator.geolocation.getCurrentPosition(res, rej, {timeout: 5000}));
-      lat = pos.coords.latitude; lng = pos.coords.longitude;
-    }catch(e){
-      // user denied or timeout
-    }
-  }
-  const rec = { id: uid('att'), employeeId: empId, time: new Date().toISOString(), type, lat, lng };
-  store.attendance.push(rec); saveStore(); renderAttendance(); closeAttendanceForm(); renderDashboard();
-}
 
-function renderAttendance(){
-  const tbody = document.getElementById('attTableBody'); tbody.innerHTML = '';
-  const recent = store.attendance.slice(-200).reverse();
-  recent.forEach(r=>{
-    const e = store.employees.find(x=>x.id===r.employeeId) || {fullname:'Unknown'};
-    const loc = (r.lat && r.lng) ? `${r.lat.toFixed(3)}, ${r.lng.toFixed(3)}` : '-';
-    tbody.innerHTML += `<tr><td>${new Date(r.time).toLocaleString()}</td><td>${escapeHtml(e.fullname)}</td><td>${r.type}</td><td>${loc}</td></tr>`;
-  });
-  document.getElementById('kpiAttendance').innerText = store.attendance.length;
-}
+let SESSION = { user: null, role: null }; // role: admin | employee
 
-/* ===========================
-   Leave Management
-   =========================== */
-function openLeaveForm(){ document.getElementById('leaveForm').style.display='block'; populateSelects(); }
-function closeLeaveForm(){ document.getElementById('leaveForm').style.display='none'; }
-function applyLeave(){
-  const empId = document.getElementById('leave_employee').value;
-  const type = document.getElementById('leave_type').value;
-  const from = document.getElementById('leave_from').value;
-  const to = document.getElementById('leave_to').value;
-  const reason = document.getElementById('leave_reason').value;
-  if(!empId || !from || !to) return alert('Complete fields');
-  const rec = { id: uid('leave'), employeeId: empId, type, from, to, reason, status:'pending', appliedAt: new Date().toISOString() };
-  store.leaves.push(rec); saveStore(); renderLeaves(); closeLeaveForm(); renderDashboard();
+function openLogin(){
+  document.getElementById('loginModal').style.display = 'flex';
+  // reset fields
+  document.getElementById('loginRole').value = 'admin';
+  document.getElementById('adminLoginFields').style.display = 'block';
+  document.getElementById('empLoginFields').style.display = 'none';
 }
-function renderLeaves(){
-  const tbody = document.getElementById('leaveTableBody'); tbody.innerHTML='';
-  store.leaves.forEach(l=>{
-    const e = store.employees.find(x=>x.id===l.employeeId) || {};
-    tbody.innerHTML += `<tr>
-      <td>${escapeHtml(e.fullname||l.employeeId)}</td>
-      <td>${escapeHtml(l.type)}</td>
-      <td>${escapeHtml(l.from)}</td>
-      <td>${escapeHtml(l.to)}</td>
-      <td>${escapeHtml(l.status)}</td>
-      <td>${l.status==='pending' ? `<button class="btn primary" onclick="decideLeave('${l.id}','approved')">Approve</button> <button class="btn ghost" onclick="decideLeave('${l.id}','rejected')">Reject</button>` : ''}</td>
-    </tr>`;
-  });
-  const pending = store.leaves.filter(x=>x.status==='pending').length;
-  document.getElementById('kpiLeaves').innerText = pending;
-}
-function decideLeave(id,status){
-  store.leaves = store.leaves.map(l=> l.id===id ? {...l, status, decidedAt: new Date().toISOString()} : l);
-  saveStore(); renderLeaves(); renderDashboard();
-}
-
-/* ===========================
-   Payroll
-   =========================== */
-function openPayrollForm(){ document.getElementById('payForm').style.display='block'; populateSelects(); }
-function closePayrollForm(){ document.getElementById('payForm').style.display='none'; }
-function generatePayroll(){
-  const empId = document.getElementById('pay_employee').value;
-  const month = document.getElementById('pay_month').value;
-  const ot = Number(document.getElementById('pay_ot').value || 0);
-  const other = Number(document.getElementById('pay_other').value || 0);
-  if(!empId || !month) return alert('Select employee and month');
-  const emp = store.employees.find(e=>e.id===empId);
-  const basic = Number(emp.basic || 0);
-  const hra = Number(emp.hra || Math.round(basic*0.2));
-  const conv = Math.round(basic*0.05);
-  const overtime = Math.round((basic/208) * ot);
-  const gross = basic + hra + conv + overtime;
-  const pf = Math.round(basic * 0.12);
-  const totalDed = pf + other;
-  const net = gross - totalDed;
-  const rec = { id: uid('pay'), employeeId: empId, month, basic, hra, conv, overtime, gross, pf, other, totalDed, net, generatedAt: new Date().toISOString(), pdf: null };
-  store.payroll.push(rec); saveStore(); renderPayrolls(); createPayslipPdf(rec, emp);
-}
-function renderPayrolls(){
-  const tbody = document.getElementById('payrollTableBody'); tbody.innerHTML='';
-  store.payroll.forEach(p=>{
-    const e = store.employees.find(x=>x.id===p.employeeId) || {};
-    tbody.innerHTML += `<tr><td>${escapeHtml(e.fullname||p.employeeId)}</td><td>${escapeHtml(p.month)}</td><td>₹${p.gross.toFixed(2)}</td><td>₹${p.net.toFixed(2)}</td><td><button class="btn ghost" onclick="downloadPayslip('${p.id}')">Download</button></td></tr>`;
-  });
-  document.getElementById('kpiPayrolls').innerText = store.payroll.length;
-}
-
-async function createPayslipPdf(p, emp){
-  // simple payslip rendering
-  const node = document.createElement('div'); node.style.width='800px'; node.style.padding='20px'; node.style.background='white';
-  node.innerHTML = `<div style="font-weight:900;font-size:20px">Payslip — ${p.month}</div>
-    <div style="margin-top:8px">Name: ${escapeHtml(emp.fullname)} (${escapeHtml(emp.code||'')})</div>
-    <table style="width:100%;margin-top:12px;border-collapse:collapse;">
-      <tr><td style="padding:6px;border:1px solid #eee">Basic</td><td style="padding:6px;border:1px solid #eee">₹${p.basic.toFixed(2)}</td></tr>
-      <tr><td style="padding:6px;border:1px solid #eee">HRA</td><td style="padding:6px;border:1px solid #eee">₹${p.hra.toFixed(2)}</td></tr>
-      <tr><td style="padding:6px;border:1px solid #eee">Conveyance</td><td style="padding:6px;border:1px solid #eee">₹${p.conv.toFixed(2)}</td></tr>
-      <tr><td style="padding:6px;border:1px solid #eee">OT</td><td style="padding:6px;border:1px solid #eee">₹${p.overtime.toFixed(2)}</td></tr>
-      <tr><td style="padding:6px;border:1px solid #eee"><strong>Gross</strong></td><td style="padding:6px;border:1px solid #eee"><strong>₹${p.gross.toFixed(2)}</strong></td></tr>
-      <tr><td style="padding:6px;border:1px solid #eee">PF</td><td style="padding:6px;border:1px solid #eee">₹${p.pf.toFixed(2)}</td></tr>
-      <tr><td style="padding:6px;border:1px solid #eee">Other Deductions</td><td style="padding:6px;border:1px solid #eee">₹${p.other.toFixed(2)}</td></tr>
-      <tr><td style="padding:6px;border:1px solid #eee"><strong>Net Pay</strong></td><td style="padding:6px;border:1px solid #eee"><strong>₹${p.net.toFixed(2)}</strong></td></tr>
-    </table>`;
-  document.body.appendChild(node);
-  const canvas = await html2canvas(node);
-  document.body.removeChild(node);
-  const img = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF();
-  const width = pdf.internal.pageSize.getWidth() - 20;
-  pdf.addImage(img,'PNG',10,10,width,0);
-  p.pdf = pdf.output('datauristring'); saveStore();
-  pdf.save(`Payslip_${emp.code||emp.id}_${p.month}.pdf`);
-}
-function downloadPayslip(payId){
-  const p = store.payroll.find(x=>x.id===payId);
-  const emp = store.employees.find(x=>x.id===p.employeeId);
-  if(p && p.pdf){ const w = window.open(''); w.document.write(`<iframe src="${p.pdf}" style="width:100%;height:100vh;border:none"></iframe>`); } else createPayslipPdf(p, emp);
-}
-
-/* ===========================
-   Documents
-   =========================== */
-function openDocForm(){ document.getElementById('docForm').style.display='block'; populateSelects(); }
-function closeDocForm(){ document.getElementById('docForm').style.display='none'; }
-async function uploadDoc(){
-  const empId = document.getElementById('doc_emp').value;
-  const type = document.getElementById('doc_type').value.trim();
-  const f = document.getElementById('doc_file').files[0];
-  if(!empId || !type || !f) return alert('Complete fields');
-  const data = await fileToBase64(f);
-  const rec = { id: uid('doc2'), employeeId: empId, type, name: f.name, data, uploadedAt: new Date().toISOString() };
-  store.documents.push(rec); saveStore(); renderDocuments(); closeDocForm();
-}
-function renderDocuments(){
-  const tbody = document.getElementById('docTableBody'); tbody.innerHTML = '';
-  store.documents.forEach(d=>{
-    const e = store.employees.find(x=>x.id===d.employeeId) || {};
-    tbody.innerHTML += `<tr>
-      <td>${escapeHtml(e.fullname||d.employeeId)}</td>
-      <td>${escapeHtml(d.type)}</td>
-      <td>${new Date(d.uploadedAt).toLocaleString()}</td>
-      <td><button class="btn ghost" onclick="downloadDoc('${d.id}')">Download</button></td>
-    </tr>`;
-  });
-}
-function downloadDoc(id){ const d = store.documents.find(x=>x.id===id); if(!d) return; const a=document.createElement('a'); a.href=d.data; a.download=d.name; a.click(); }
-
-/* ===========================
-   Recruitment (candidates)
-   =========================== */
-function openCandidateForm(){ document.getElementById('candForm').style.display='block'; }
-function closeCandidateForm(){ document.getElementById('candForm').style.display='none'; }
-function saveCandidate(){
-  const name = document.getElementById('c_name').value.trim();
-  if(!name) return alert('Name required');
-  const rec = { id: uid('cand'), name, email: document.getElementById('c_email').value.trim(), phone: document.getElementById('c_phone').value.trim(), source: document.getElementById('c_source').value.trim(), status:'Applied', addedAt: new Date().toISOString() };
-  store.candidates.push(rec); saveStore(); renderCandidates(); closeCandidateForm();
-}
-function renderCandidates(){
-  const tb = document.getElementById('candTableBody'); tb.innerHTML='';
-  store.candidates.forEach(c=>{
-    tb.innerHTML += `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.email)}</td><td>${escapeHtml(c.phone)}</td><td>${escapeHtml(c.source)}</td><td>${escapeHtml(c.status)}</td><td><button class="btn ghost" onclick="hireCandidate('${c.id}')">Hire</button></td></tr>`;
-  });
-}
-function hireCandidate(id){
-  const c = store.candidates.find(x=>x.id===id);
-  if(!c) return;
-  // convert candidate to employee basic info
-  const emp = { id: uid('emp'), fullname: c.name, code: 'EMP' + Math.floor(Math.random()*9000+100), email: c.email, phone: c.phone, department:'', designation:'', doj: new Date().toISOString().slice(0,10), basic:0, hra:0, photo:null, docs:[] };
-  store.employees.push(emp); // mark candidate as hired
-  c.status = 'Hired';
-  saveStore(); renderCandidates(); renderEmployeesTable(); populateSelects(); alert('Candidate hired as employee: ' + emp.fullname);
-}
-
-/* ===========================
-   Performance (goals & ratings)
-   =========================== */
-function openGoalForm(){ document.getElementById('goalForm').style.display='block'; populateSelects(); }
-function closeGoalForm(){ document.getElementById('goalForm').style.display='none'; }
-function saveGoal(){
-  const empId = document.getElementById('goal_emp').value;
-  const title = document.getElementById('goal_title').value.trim();
-  if(!empId || !title) return alert('Complete fields');
-  const rec = { id: uid('goal'), employeeId: empId, title, rating: null, createdAt:new Date().toISOString() };
-  store.goals.push(rec); saveStore(); renderGoals(); closeGoalForm();
-}
-function renderGoals(){
-  const tb = document.getElementById('goalsTableBody'); tb.innerHTML='';
-  store.goals.forEach(g=>{
-    const e = store.employees.find(x=>x.id===g.employeeId) || {};
-    tb.innerHTML += `<tr><td>${escapeHtml(e.fullname||g.employeeId)}</td><td>${escapeHtml(g.title)}</td><td>${g.rating===null ? '-' : g.rating}</td><td><button class="btn ghost" onclick="rateGoal('${g.id}')">Rate</button></td></tr>`;
-  });
-}
-function rateGoal(id){
-  const val = prompt('Enter rating 1-5');
-  const r = Number(val);
-  if(!r || r<1 || r>5) return alert('Invalid rating');
-  store.goals = store.goals.map(g=> g.id===id ? {...g, rating: r, ratedAt: new Date().toISOString()} : g);
-  saveStore(); renderGoals();
-}
-
-/* ===========================
-   Reports & Exports
-   =========================== */
-function exportAllExcel(){
-  // employees, attendance, leaves, payroll
-  const wb = XLSX.utils.book_new();
-  const empData = store.employees.map(e=>({Code:e.code,Name:e.fullname,Dept:e.department,Desig:e.designation,Phone:e.phone,Basic:e.basic}));
-  const attData = store.attendance.map(a=>({Time:new Date(a.time).toLocaleString(),Employee:(store.employees.find(x=>x.id===a.employeeId)||{}).fullname||a.employeeId,Type:a.type}));
-  const leaveData = store.leaves.map(l=>({Employee:(store.employees.find(x=>x.id===l.employeeId)||{}).fullname||l.employeeId,Type:l.type,From:l.from,To:l.to,Status:l.status}));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(empData), 'Employees');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(attData), 'Attendance');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leaveData), 'Leaves');
-  XLSX.writeFile(wb, 'Konarak_HRMS_Export.xlsx');
-}
-async function exportAllPdf(){
-  // produce employees pdf then attendance pdf (simple)
-  await exportEmployeesPdf();
-  await exportAttendancePdf();
-}
-function exportEmployees(){ exportEmployeesExcel(); }
-function exportEmployeesExcel(){
-  const data = store.employees.map(e=>({Code:e.code,Name:e.fullname,Dept:e.department,Desig:e.designation,Phone:e.phone,Basic:e.basic}));
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Employees'); XLSX.writeFile(wb, 'Employees.xlsx');
-}
-async function exportEmployeesPdf(){
-  const node = document.createElement('div'); node.style.padding='12px'; node.style.background='white';
-  node.innerHTML = `<h3>Employees</h3><table style="width:100%;border-collapse:collapse;">${store.employees.map(e=>`<tr><td style="padding:6px;border:1px solid #ddd">${escapeHtml(e.fullname)}</td><td style="padding:6px;border:1px solid #ddd">${escapeHtml(e.code)}</td><td style="padding:6px;border:1px solid #ddd">${escapeHtml(e.department||'')}</td><td style="padding:6px;border:1px solid #ddd">₹${(e.basic||0).toFixed(2)}</td></tr>`).join('')}</table>`;
-  document.body.appendChild(node);
-  const canvas = await html2canvas(node);
-  document.body.removeChild(node);
-  const img = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF(); pdf.addImage(img,'PNG',10,10,pdf.internal.pageSize.getWidth()-20,0); pdf.save('Employees.pdf');
-}
-function exportAttendance(){ exportAttendanceExcel(); }
-function exportAttendanceExcel(){
-  const data = store.attendance.map(a=>({Time:new Date(a.time).toLocaleString(),Employee:(store.employees.find(x=>x.id===a.employeeId)||{}).fullname||a.employeeId,Type:a.type}));
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Attendance'); XLSX.writeFile(wb, 'Attendance.xlsx');
-}
-async function exportAttendancePdf(){
-  const node = document.createElement('div'); node.style.padding='12px'; node.style.background='white';
-  node.innerHTML = `<h3>Attendance</h3><table style="width:100%;border-collapse:collapse;">${store.attendance.map(a=>`<tr><td style="padding:6px;border:1px solid #ddd">${new Date(a.time).toLocaleString()}</td><td style="padding:6px;border:1px solid #ddd">${(store.employees.find(x=>x.id===a.employeeId)||{}).fullname||a.employeeId}</td><td style="padding:6px;border:1px solid #ddd">${a.type}</td></tr>`).join('')}</table>`;
-  document.body.appendChild(node);
-  const canvas = await html2canvas(node);
-  document.body.removeChild(node);
-  const img = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF(); pdf.addImage(img,'PNG',10,10,pdf.internal.pageSize.getWidth()-20,0); pdf.save('Attendance.pdf');
-}
-function exportLeaves(){ const data = store.leaves.map(l=>({Employee:(store.employees.find(x=>x.id===l.employeeId)||{}).fullname||l.employeeId,Type:l.type,From:l.from,To:l.to,Status:l.status})); const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Leaves'); XLSX.writeFile(wb, 'Leaves.xlsx'); }
-function exportPayrolls(){ const data = store.payroll.map(p=>({Employee:(store.employees.find(x=>x.id===p.employeeId)||{}).fullname||p.employeeId,Month:p.month,Gross:p.gross,Net:p.net})); const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Payrolls'); XLSX.writeFile(wb, 'Payrolls.xlsx'); }
-function exportDocuments(){ const data = store.documents.map(d=>({Employee:(store.employees.find(x=>x.id===d.employeeId)||{}).fullname||d.employeeId,Type:d.type,Name:d.name,Uploaded:d.uploadedAt})); const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Documents'); XLSX.writeFile(wb, 'Documents.xlsx'); }
-function exportCandidates(){ const data = store.candidates.map(c=>({Name:c.name,Email:c.email,Phone:c.phone,Source:c.source,Status:c.status})); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data),'Candidates'); XLSX.writeFile(wb, 'Candidates.xlsx'); }
-
-/* ===========================
-   Reports quick functions
-   =========================== */
-function reportEmployeesByDept(){
-  const groups = {};
-  store.employees.forEach(e=>{ const k = e.department || 'Unassigned'; groups[k] = (groups[k]||0)+1; });
-  alert(Object.entries(groups).map(r=>`${r[0]}: ${r[1]}`).join('\\n') || 'No data');
-}
-function reportMonthlyAttendance(){
-  const groups = {};
-  store.attendance.forEach(a=>{
-    const m = new Date(a.time).toISOString().slice(0,7);
-    groups[m] = (groups[m]||0)+1;
-  });
-  alert(Object.entries(groups).map(r=>`${r[0]}: ${r[1]}`).join('\\n') || 'No data');
-}
-function reportPayrollSummary(){
-  const total = store.payroll.reduce((s,p)=>s+p.net,0);
-  alert(`Payroll records: ${store.payroll.length}\\nTotal net paid: ₹${total.toFixed(2)}`);
-}
-function reportLeavesSummary(){
-  const groups = {};
-  store.leaves.forEach(l=> groups[l.type] = (groups[l.type]||0)+1);
-  alert(Object.entries(groups).map(r=>`${r[0]}: ${r[1]}`).join('\\n') || 'No data');
-}
-
-/* ===========================
-   Backup / Import / Utilities
-   =========================== */
-function downloadBackup(){
-  const a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(store,null,2)); a.download = 'konarak_hrms_backup.json'; a.click();
-}
-function importBackup(e){
-  const f = e.target.files[0]; if(!f) return;
-  const r = new FileReader(); r.onload = ()=> { try{ store = JSON.parse(r.result); saveStore(); renderAll(); alert('Imported'); } catch(err){ alert('Invalid JSON'); } }; r.readAsText(f);
-}
-function clearAllData(){ if(!confirm('Clear all app data? This cannot be undone.')) return; store = { employees:[],attendance:[],leaves:[],payroll:[],documents:[],candidates:[],goals:[],meta:{theme:'light'} }; saveStore(); renderAll(); }
-
-/* ===========================
-   small helpers
-   =========================== */
-function escapeHtml(s){ if(!s && s!==0) return ''; return String(s).replace(/[&<>"'`=\/]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'})[c]; }); }
-function fileToBase64(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload = ()=> res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); }); }
-
-/* ===========================
-   UI helpers: populate selects, render modules
-   =========================== */
-function populateSelects(){
-  const employeeSelects = ['att_employee','leave_employee','pay_employee','doc_emp','goal_emp'];
-  employeeSelects.forEach(id=>{
-    const el = document.getElementById(id);
-    if(!el) return;
-    el.innerHTML = '<option value="">-- Select employee --</option>' + store.employees.map(e=>`<option value="${e.id}">${escapeHtml(e.fullname)} (${escapeHtml(e.code||'')})</option>`).join('');
-  });
-}
-function renderAll(){
-  renderDashboard(); renderEmployeesTable(); renderAttendance(); renderLeaves(); renderPayrolls(); renderDocuments(); renderCandidates(); renderGoals(); populateSelects();
-}
-function renderDashboard(){
-  document.getElementById('kpiEmployees').innerText = store.employees.length;
-  document.getElementById('kpiAttendance').innerText = store.attendance.length;
-  document.getElementById('kpiLeaves').innerText = store.leaves.filter(x=>x.status==='pending').length;
-  document.getElementById('kpiPayrolls').innerText = store.payroll.length;
-  // recent activity
-  const activity = [];
-  store.attendance.slice(-6).reverse().forEach(a=>{ const e = store.employees.find(x=>x.id===a.employeeId) || {}; activity.push(`${new Date(a.time).toLocaleString()} — ${e.fullname||a.employeeId} — ${a.type}`); });
-  store.leaves.slice(-6).reverse().forEach(l=>{ const e = store.employees.find(x=>x.id===l.employeeId) || {}; activity.push(`${l.type} leave ${l.status} — ${e.fullname||l.employeeId}`); });
-  document.getElementById('recentActivity').innerHTML = activity.map(s=>`<div class="small">${escapeHtml(s)}</div>`).join('') || '<div class="small">No recent activity</div>';
-}
-
-/* ===========================
-   Misc: Documents open
-   =========================== */
-function renderDocuments(){
-  // when called externally
-  const db = document.getElementById('docTableBody');
-  if(db) db.innerHTML = '';
-  store.documents.forEach(d=>{
-    if(db) db.innerHTML += `<tr><td>${escapeHtml((store.employees.find(e=>e.id===d.employeeId)||{}).fullname||d.employeeId)}</td><td>${escapeHtml(d.type)}</td><td>${escapeHtml(new Date(d.uploadedAt).toLocaleString())}</td><td><button class="btn ghost" onclick="downloadDoc('${d.id}')">Download</button></td></tr>`;
-  });
-}
-
-/* ===========================
-   Candidates + Goals rendering simple
-   =========================== */
-function renderCandidates(){ const tb=document.getElementById('candTableBody'); if(tb){ tb.innerHTML=''; store.candidates.forEach(c=> tb.innerHTML += `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.email)}</td><td>${escapeHtml(c.phone)}</td><td>${escapeHtml(c.source)}</td><td>${escapeHtml(c.status)}</td><td><button class="btn ghost" onclick="hireCandidate('${c.id}')">Hire</button></td></tr>`); } }
-function renderGoals(){ const tb=document.getElementById('goalsTableBody'); if(tb){ tb.innerHTML=''; store.goals.forEach(g=>{ const e = store.employees.find(x=>x.id===g.employeeId)||{}; tb.innerHTML += `<tr><td>${escapeHtml(e.fullname)}</td><td>${escapeHtml(g.title)}</td><td>${g.rating===null?'-':g.rating}</td><td><button class="btn ghost" onclick="rateGoal('${g.id}')">Rate</button></td></tr>`; }); } }
-
-/* ===========================
-   small: populate selects & call render
-   =========================== */
-populateSelects();
-renderAll();
-
-/* ===========================
-   Theme support
-   =========================== */
-function applyTheme(){
-  const t = document.getElementById('themeSelect').value;
-  if(t==='dark'){ document.body.setAttribute('data-theme','dark'); store.meta.theme='dark'; }
-  else if(t==='purple'){ document.body.setAttribute('data-theme','light'); document.documentElement.style.setProperty('--accent','#7c3aed'); store.meta.theme='purple'; }
-  else if(t==='blue'){ document.body.setAttribute('data-theme','light'); document.documentElement.style.setProperty('--accent','#0ea5e9'); store.meta.theme='blue'; }
-  else { document.body.setAttribute('data-theme','light'); document.documentElement.style.setProperty('--accent','#22c1ee'); store.meta.theme='light'; }
-  saveStore();
-}
-function applyThemeInitial(){
-  const t = (store.meta && store.meta.theme) || 'light';
-  const sel = document.getElementById('themeSelect');
-  if(sel) sel.value = t;
-  applyTheme();
-}
-function toggleTheme(){ if(document.body.getAttribute('data-theme')==='dark') { document.body.setAttribute('data-theme','light'); store.meta.theme='light'; } else { document.body.setAttribute('data-theme','dark'); store.meta.theme='dark'; } saveStore(); }
-
-/* ===========================
-   Backup helpers wiring UI at load
-   =========================== */
-document.addEventListener('DOMContentLoaded', ()=>{
-  // wire saveEmployee button: we had inline onclick earlier for saveEmployee, ensure it exists
-  // render initial
-  renderAll();
+function closeLogin(){ document.getElementById('loginModal').style.display = 'none'; }
+document.getElementById('loginRole').addEventListener('change', function(e){
+  const v = e.target.value;
+  document.getElementById('adminLoginFields').style.display = v === 'admin' ? 'block' : 'none';
+  document.getElementById('empLoginFields').style.display = v === 'employee' ? 'block' : 'none';
 });
 
-/* ===========================
-   Utility small UI functions used earlier but not defined
-   =========================== */
-function populateSelectsOnDemand(){ populateSelects(); }
-window.populateSelects = populateSelects;
-
-/* ===========================
-   Export helper small wrappers (used by UI buttons)
-   =========================== */
-window.exportEmployees = exportEmployees;
-window.exportEmployeesPdf = exportEmployeesPdf;
-window.exportAttendance = exportAttendance;
-window.exportPayrolls = exportPayrolls;
-window.exportDocuments = exportDocuments;
-window.exportCandidates = exportCandidates;
-
-/* ===========================
-   Safe render helper to call after operations
-   =========================== */
-function renderAll(){
-  populateSelects();
-  renderEmployeesTable();
-  renderAttendance();
-  renderLeaves();
-  renderPayrolls();
-  renderDocuments();
-  renderCandidates();
-  renderGoals();
-  renderDashboard();
+/* Perform login */
+function performLogin(){
+  const role = document.getElementById('loginRole').value;
+  if(role === 'admin'){
+    const email = (document.getElementById('adminEmail').value || '').trim();
+    const pass = (document.getElementById('adminPass').value || '').trim();
+    const found = (STORE.meta && STORE.meta.admins || []).find(a => a.email === email && a.password === pass);
+    if(!found){ alert('Invalid admin credentials'); return; }
+    SESSION = { user: found, role: 'admin' };
+    closeLogin(); onSignedIn();
+  } else {
+    const code = (document.getElementById('empCode').value || '').trim();
+    const pass = (document.getElementById('empPass').value || '').trim();
+    if(!code || !pass){ alert('Employee code and password required'); return; }
+    const emp = STORE.employees.find(e => (e.code === code || e.email === code) && e.password === pass);
+    if(!emp){ alert('Invalid employee credentials'); return; }
+    SESSION = { user: emp, role: 'employee' };
+    closeLogin(); onSignedIn();
+  }
 }
 
-// ensure renderAll exposed
-window.renderAll = renderAll;
+/* Sign out */
+function signOut(){
+  SESSION = { user: null, role: null };
+  document.getElementById('headerUser').innerText = 'Not signed in';
+  route('home');
+}
+
+/* On sign-in */
+function onSignedIn(){
+  const role = SESSION.role;
+  const name = SESSION.user && (SESSION.user.name || SESSION.user.fullname || SESSION.user.email) || 'user';
+  document.getElementById('headerUser').innerText = `${name} (${role})`;
+  logActivity(`${name} signed in as ${role}`);
+  if(role === 'admin'){ route('dashboard'); }
+  else { route('dashboard'); showEmployeeDashboard(); }
+}
+
+/* If a page needs to show employee-specific views, use this helper */
+function requireAdmin(actionIfOk){
+  if(SESSION.role !== 'admin') { alert('Admin access required'); return; }
+  actionIfOk();
+}
 
 /* ===========================
-   End of script
+   Simple UI renderers for Part1
+   (will be expanded in later parts)
    =========================== */
-</script>
 
+function renderDashboard(){
+  document.getElementById('kpiEmployees').innerText = (STORE.employees || []).length;
+  document.getElementById('kpiLeaves').innerText = (STORE.leaves || []).filter(l=>l.status==='pending').length;
+  document.getElementById('kpiAttendance').innerText = (STORE.attendance || []).length;
+  // recent activity
+  const recent = (STORE.logs || []).slice(-10).reverse();
+  const out = recent.map(r => `<div class="mini" style="margin-bottom:6px">${escapeHtml(new Date(r.time).toLocaleString())} — ${escapeHtml(r.text)}</div>`).join('') || '<div class="mini muted">No recent activity</div>';
+  document.getElementById('recentActivity').innerHTML = out;
+}
+
+/* Short employees render used on dashboard route */
+function renderEmployeesShort(){
+  const el = document.getElementById('empListPlaceholder');
+  if(!el) return;
+  if((STORE.employees||[]).length === 0) { el.innerHTML = '<div class="mini muted">No employees yet. Use Recruitment to add candidates and hire.</div>'; return; }
+  const rows = STORE.employees.map(e => `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.02)"><div><strong>${escapeHtml(e.fullname)}</strong><div class="mini muted">${escapeHtml(e.designation||'')} — ${escapeHtml(e.department||'')}</div></div><div class="mini muted">${escapeHtml(e.code||'')}</div></div>`).join('');
+  el.innerHTML = rows;
+}
+
+/* Employee dashboard view for employees after login (basic) */
+function showEmployeeDashboard(){
+  // Ensure employee logged in
+  if(!SESSION || SESSION.role !== 'employee') return;
+  route('dashboard');
+  // Add a custom welcome message for employee
+  document.getElementById('recentActivity').innerHTML = `<div class="mini">Welcome ${escapeHtml(SESSION.user.fullname || SESSION.user.email)}. Use the left menu to view your data.</div>`;
+}
+
+/* ===========================
+   Backup / Restore (single JSON)
+   =========================== */
+function downloadBackup(){
+  const data = JSON.stringify(STORE, null, 2);
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+  a.download = `konarak_hrms_backup_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'_')}.json`;
+  a.click();
+  logActivity('Downloaded backup');
+}
+function importBackup(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const parsed = JSON.parse(r.result);
+      // Very small validation
+      if(!parsed || typeof parsed !== 'object' || !parsed.meta) return alert('Invalid backup file');
+      if(!confirm('Import backup will overwrite current local data. Continue?')) return;
+      STORE = parsed;
+      saveStore();
+      renderDashboard();
+      alert('Backup imported successfully.');
+      logActivity('Imported backup');
+    } catch(err){ alert('Invalid JSON file'); }
+  };
+  r.readAsText(f);
+}
+
+/* ===========================
+   Prevent duplicate hires (recruitment safety)
+   - Example usage in recruitment module (Part 3)
+   =========================== */
+function isDuplicateCandidate(candidate){
+  // crude duplicate check: same email or phone or name+source
+  const c = (STORE.candidates || []).find(x => (x.email && x.email === candidate.email) || (x.phone && x.phone === candidate.phone));
+  if(c) return true;
+  // also check employees
+  const e = (STORE.employees || []).find(x => (x.email && x.email === candidate.email) || (x.phone && x.phone === candidate.phone));
+  if(e) return true;
+  return false;
+}
+
+/* ===========================
+   Helper: seed sample data (for testing) - only when store empty and on admin action
+   =========================== */
+function seedDemoData(){
+  if((STORE.employees||[]).length>0) { alert('Store already contains employees'); return; }
+  // create 6 demo employees with passwords
+  const demo = [
+    {fullname:'Rahul Kumar', code:'EMP1001', email:'rahul@example.com', phone:'9876500011', department:'Operations', designation:'Manager', basic:30000},
+    {fullname:'Asha Rani', code:'EMP1002', email:'asha@example.com', phone:'9876500022', department:'Sales', designation:'Executive', basic:22000},
+    {fullname:'Siva Prasad', code:'EMP1003', email:'siva@example.com', phone:'9876500033', department:'Production', designation:'Supervisor', basic:25000},
+    {fullname:'Maya Singh', code:'EMP1004', email:'maya@example.com', phone:'9876500044', department:'HR', designation:'HR Executive', basic:24000},
+    {fullname:'Vikram Rao', code:'EMP1005', email:'vikram@example.com', phone:'9876500055', department:'Logistics', designation:'Lead', basic:26000},
+    {fullname:'Neha Gupta', code:'EMP1006', email:'neha@example.com', phone:'9876500066', department:'Finance', designation:'Accountant', basic:27000}
+  ];
+  demo.forEach(d=>{
+    const pwd = 'Welcome@' + Math.floor(Math.random()*900 + 100);
+    const e = {...d, id: uid('emp'), password: pwd, photo:null, docs: [], doj: new Date().toISOString().slice(0,10), hra: Math.round(d.basic*0.2)};
+    STORE.employees.push(e);
+    logActivity(`Seed employee ${e.fullname} created (pwd:${pwd})`);
+  });
+  saveStore();
+  alert('Demo employees seeded. Use Employee Central to see details. Default passwords created and logged to activity.');
+  renderEmployeesShort();
+}
+
+/* Expose seed function to admin in console */
+window.seedDemoData = seedDemoData;
+
+/* ===========================
+   Initial render
+   =========================== */
+renderDashboard();
+renderEmployeesShort();
+populateInitialUIState();
+
+/* small helper to wire UI state on load */
+function populateInitialUIState(){
+  // header
+  document.getElementById('headerUser').innerText = 'Not signed in';
+  // set theme selector
+  const sel = document.getElementById('themeSelect');
+  if(sel) sel.value = STORE.meta.theme || 'dark';
+  // route home
+  route('home');
+}
+
+/* ===========================
+   End of Part 1 core file
+   Next: Part 2 will add Employee Master UI + CRUD + file/attachments + robust password generation
+   =========================== */
+
+</script>
 </body>
 </html>
