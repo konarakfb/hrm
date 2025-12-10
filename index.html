@@ -747,27 +747,204 @@
 
 
 
-      
-      
-      <!-- Documents placeholder -->
-      <div id="documentsView" style="display:none;">
-        <div class="section">
-          <div class="section-title">Documents</div>
-          <div class="mini muted">Documents module coming next (Part 5)</div>
+<!-- ========== PART 9: REPORTS (R2) ========== -->
+<div id="reportsView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Reports & Analytics</div>
+        <div class="mini muted">Standard Corporate Dashboard — charts: Dept, Employee Type, Attendance trend</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn ghost" onclick="reports_refreshAll()">Refresh</button>
+        <button class="btn ghost" onclick="reports_exportPdf()">Export Dashboard (PDF)</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      <div class="card">
+        <div style="font-weight:800">Total Employees</div>
+        <div id="r_totalEmployees" style="font-size:26px;margin-top:8px">0</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:800">Active Today</div>
+        <div id="r_activeToday" style="font-size:26px;margin-top:8px">0</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:800">On Leave Today</div>
+        <div id="r_onLeaveToday" style="font-size:26px;margin-top:8px">0</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:grid;grid-template-columns:2fr 1fr;gap:12px;">
+      <div class="card" style="padding:16px;">
+        <div style="font-weight:800">Employees by Department</div>
+        <canvas id="chartDept" style="max-height:320px;margin-top:12px"></canvas>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="padding:12px;">
+          <div style="font-weight:800">Employee Type</div>
+          <canvas id="chartType" style="max-height:220px;margin-top:12px"></canvas>
+        </div>
+        <div class="card" style="padding:12px;">
+          <div style="font-weight:800">Attendance (Month Avg)</div>
+          <canvas id="chartAttendance" style="max-height:140px;margin-top:12px"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;" class="section">
+      <div style="font-weight:800">Quick Table — Dept Summary</div>
+      <div style="margin-top:8px;overflow:auto">
+        <table id="r_dept_table">
+          <thead><tr><th>Department</th><th>Employees</th><th>On Leave</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ========== END REPORTS ========== -->
+
+<!-- ========== PART 10: DOCUMENTS (D2) ========== -->
+<div id="documentsView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Documents Repository</div>
+        <div class="mini muted">Categorized repository — Company Policies / HR Forms / Salary / Legal / Misc</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="doc_search" class="field small" placeholder="Search documents..." oninput="docs_renderList()" />
+        <button class="btn primary" onclick="docs_openUpload()">Upload Document</button>
+        <button class="btn ghost" onclick="docs_exportList()">Export List</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:12px;">
+      <div style="width:220px;">
+        <div style="font-weight:800">Categories</div>
+        <div style="margin-top:8px" id="doc_categories"></div>
+        <div style="margin-top:12px">
+          <input id="doc_new_cat" class="field small" placeholder="Add category" />
+          <button class="btn ghost" onclick="docs_addCategory()">Add</button>
         </div>
       </div>
 
-  
-
-    
-
-      <!-- Reports placeholder -->
-      <div id="reportsView" style="display:none;">
-        <div class="section">
-          <div class="section-title">Reports</div>
-          <div class="mini muted">Reports & exports in Part 9</div>
+      <div style="flex:1;">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:800">Documents</div>
+            <div class="mini muted">Click to view • Admin can mark Public/Private</div>
+          </div>
+          <div style="margin-top:8px;overflow:auto;max-height:420px">
+            <table id="docs_table" style="width:100%;border-collapse:collapse">
+              <thead><tr><th>Title</th><th>Category</th><th>Visibility</th><th>Uploaded</th><th>Actions</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
       </div>
+    </div>
+
+  </div>
+</div>
+<!-- ========== END DOCUMENTS ========== -->
+
+<!-- ========== PART 11: SETTINGS (S3) ========== -->
+<div id="settingsView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Settings</div>
+        <div class="mini muted">Full system configuration • Modules • Theme • Attendance / Leave / Payroll rules • Backup & Audit</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn ghost" onclick="settings_exportBackup()">Export Backup</button>
+        <input id="settings_import_file" type="file" style="display:none" onchange="settings_importBackup(event)" />
+        <button class="btn ghost" onclick="document.getElementById('settings_import_file').click()">Import Backup</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="card">
+        <div style="font-weight:800">Company</div>
+        <div style="margin-top:8px">
+          <div class="mini muted">Name</div>
+          <input id="set_company_name" class="field small" />
+          <div class="mini muted" style="margin-top:8px">Logo (file)</div>
+          <input id="set_company_logo" type="file" accept="image/*" onchange="settings_uploadLogo(event)" />
+          <div style="margin-top:8px">
+            <div class="mini muted">Primary Color</div>
+            <input id="set_color_primary" class="field small" placeholder="#3b82f6" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:800">Modules & Features</div>
+        <div style="margin-top:8px">
+          <label><input type="checkbox" id="mod_recruit"/> Recruitment</label><br/>
+          <label><input type="checkbox" id="mod_attendance"/> Attendance</label><br/>
+          <label><input type="checkbox" id="mod_leave"/> Leave</label><br/>
+          <label><input type="checkbox" id="mod_payroll"/> Payroll</label><br/>
+          <label><input type="checkbox" id="mod_ess"/> ESS</label><br/>
+          <label><input type="checkbox" id="mod_documents"/> Documents</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:800">Attendance / Leave Rules</div>
+        <div style="margin-top:8px">
+          <div class="mini muted">Late threshold (HH:MM)</div>
+          <input id="set_late_threshold" class="field small" placeholder="09:15" />
+          <div class="mini muted" style="margin-top:8px">Work hours per day</div>
+          <input id="set_work_hours" class="field small" placeholder="8" type="number" />
+          <div style="margin-top:8px">
+            <div class="mini muted">Weekly off (comma separated 0=Sun..6=Sat)</div>
+            <input id="set_weekly_off" class="field small" placeholder="0" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:800">Payroll & PF/ESI</div>
+        <div style="margin-top:8px">
+          <label><input type="checkbox" id="set_global_pf" /> Enable global PF default</label>
+          <div class="mini muted" style="margin-top:8px">ESI threshold (gross)</div>
+          <input id="set_esi_thr" class="field small" placeholder="21000" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:800">Department & Holiday Masters</div>
+        <div style="margin-top:8px">
+          <div class="mini muted">Departments (comma separated)</div>
+          <input id="set_departments" class="field small" placeholder="Sales,Operations,HR" />
+          <div style="margin-top:8px" class="mini muted">Holidays (YYYY-MM-DD,comma)</div>
+          <input id="set_holidays" class="field small" placeholder="2025-01-26,2025-08-15" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:800">Audit Log</div>
+        <div style="margin-top:8px">
+          <div style="max-height:180px;overflow:auto;border:1px solid rgba(255,255,255,0.03);padding:8px" id="audit_log"></div>
+          <div style="margin-top:8px"><button class="btn ghost" onclick="settings_clearAudit()">Clear Audit</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn primary" onclick="settings_save()">Save Settings</button>
+      <button class="btn ghost" onclick="settings_load()">Reload Settings</button>
+    </div>
+
+  </div>
+</div>
+<!-- ========== END SETTINGS ========== -->
+
 
       <!-- Settings placeholder -->
       <div id="settingsView" style="display:none;">
@@ -4262,7 +4439,456 @@ body{font-family:Segoe UI,Arial,sans-serif;background:#f3f6fb;padding:20px}
      END PART 8
      =========================== */
 }());
- 
+
+
+/* ===========================
+   PART 9/10/11: Reports (R2), Documents (D2), Settings (S3)
+   - Reports: Chart.js (dept bar, type pie, attendance line)
+   - Documents: categorized repository with Public/Private
+   - Settings: full configuration, module toggles, backup/import, audit
+   Dependencies: STORE, saveStore(), uid(), emp_find(), emp_renderList(), logActivity(), escapeHtml(), html2canvas, jspdf, XLSX
+   =========================== */
+
+(function(){
+  // ensure storages
+  STORE.documents = STORE.documents || []; // {id,title,category,visibility('public'|'private'),data: base64,dataType,uploadedAt,uploadedBy}
+  STORE.docCategories = STORE.docCategories || ['Company Policies','HR Forms','Salary Documents','Legal','Misc'];
+  STORE.settings = STORE.settings || {
+    companyName: 'Konarak Food & Beverages',
+    logo: null,
+    colorPrimary: '#3b82f6',
+    modules: { recruitment:true, attendance:true, leave:true, payroll:true, ess:true, documents:true },
+    lateThreshold: '09:15',
+    workHours: 8,
+    weeklyOff: [0],
+    globalPF: false,
+    esiThreshold: 21000,
+    departments: ['Operations','Sales','HR'],
+    holidays: []
+  };
+  STORE.activities = STORE.activities || []; // audit
+
+  // ---------- Reports (R2) ----------
+  let chartDept = null, chartType = null, chartAttendance = null;
+
+  function reports_refreshAll(){
+    reports_renderSummary();
+    reports_renderDeptChart();
+    reports_renderTypeChart();
+    reports_renderAttendanceChart();
+    reports_renderDeptTable();
+  }
+
+  function reports_renderSummary(){
+    const total = (STORE.employees||[]).length;
+    const today = new Date().toISOString().slice(0,10);
+    const activeToday = (STORE.attendance||[]).filter(a=> a.date === today && a.checkIn).length;
+    const onLeave = (STORE.attendance||[]).filter(a=> a.date === today && (a.status === 'Leave' || a.leaveType)).length;
+    document.getElementById('r_totalEmployees').innerText = total;
+    document.getElementById('r_activeToday').innerText = activeToday;
+    document.getElementById('r_onLeaveToday').innerText = onLeave;
+  }
+
+  function reports_renderDeptChart(){
+    const depts = {};
+    (STORE.employees||[]).forEach(e=> {
+      const d = (e.department || 'Unassigned');
+      depts[d] = (depts[d]||0) + 1;
+    });
+    const labels = Object.keys(depts);
+    const data = labels.map(l=> depts[l]);
+    const ctx = document.getElementById('chartDept').getContext('2d');
+    if(chartDept) chartDept.destroy();
+    chartDept = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label:'Employees', data, backgroundColor: labels.map(()=> 'rgba(59,130,246,0.8)') }]},
+      options: { responsive:true, maintainAspectRatio:false }
+    });
+  }
+
+  function reports_renderTypeChart(){
+    const types = { Permanent:0, Contract:0, Intern:0, Other:0 };
+    (STORE.employees||[]).forEach(e=>{
+      const t = (e.type || 'Permanent');
+      types[t] = (types[t]||0) + 1;
+    });
+    const labels = Object.keys(types);
+    const data = labels.map(l=> types[l]);
+    const ctx = document.getElementById('chartType').getContext('2d');
+    if(chartType) chartType.destroy();
+    chartType = new Chart(ctx, {
+      type: 'pie',
+      data: { labels, datasets:[{ data, backgroundColor: ['#60a5fa','#34d399','#f59e0b','#c084fc'] }]},
+      options: { responsive:true, maintainAspectRatio:false }
+    });
+  }
+
+  function reports_renderAttendanceChart(){
+    // show average present per day for current month (line)
+    const now = new Date(); const year = now.getFullYear(); const month = now.getMonth();
+    const days = new Date(year, month+1, 0).getDate();
+    const labels = []; const data = [];
+    for(let d=1; d<=days; d++){
+      labels.push(String(d));
+      const key = new Date(year, month, d).toISOString().slice(0,10);
+      const present = (STORE.attendance||[]).filter(a=> a.date === key && a.checkIn).length;
+      data.push(present);
+    }
+    const ctx = document.getElementById('chartAttendance').getContext('2d');
+    if(chartAttendance) chartAttendance.destroy();
+    chartAttendance = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets:[{ label:'Present count', data, fill:true, tension:0.2, backgroundColor:'rgba(59,130,246,0.15)', borderColor:'#3b82f6' }]},
+      options: { responsive:true, maintainAspectRatio:false }
+    });
+  }
+
+  function reports_renderDeptTable(){
+    const tbody = document.querySelector('#r_dept_table tbody');
+    tbody.innerHTML = '';
+    const depts = {};
+    (STORE.employees||[]).forEach(e=> { const d = e.department || 'Unassigned'; depts[d] = (depts[d]||0) + 1; });
+    Object.keys(depts).forEach(d=>{
+      const onLeave = (STORE.attendance||[]).filter(a=> a.date === new Date().toISOString().slice(0,10) && (emp_find(a.employeeId) || {}).department === d && (a.status === 'Leave' || a.leaveType)).length;
+      tbody.insertAdjacentHTML('beforeend', `<tr><td>${escapeHtml(d)}</td><td>${depts[d]}</td><td>${onLeave}</td></tr>`);
+    });
+  }
+
+  // PDF export of dashboard
+  async function reports_exportPdf(){
+    const dom = document.querySelector('#reportsView .section');
+    const clone = dom.cloneNode(true);
+    clone.style.background = '#fff'; clone.style.color = '#000'; clone.style.width = '1000px';
+    document.body.appendChild(clone);
+    const canvas = await html2canvas(clone, { scale:2 });
+    const img = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit:'pt', format:'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    pdf.addImage(img, 'PNG', 20, 20, pageW-40, 0);
+    pdf.save(`Dashboard_${new Date().toISOString().slice(0,10)}.pdf`);
+    document.body.removeChild(clone);
+  }
+
+  // expose
+  window.reports_refreshAll = reports_refreshAll;
+  window.reports_exportPdf = reports_exportPdf;
+
+  // ---------- Documents (D2) ----------
+  function docs_renderCategories(){
+    const wrap = document.getElementById('doc_categories');
+    wrap.innerHTML = STORE.docCategories.map(c=> `<div style="padding:6px 4px;"><a href="#" onclick="docs_filterCategory('${escapeHtml(c)}');return false">${escapeHtml(c)}</a></div>`).join('');
+  }
+
+  function docs_filterCategory(cat){
+    document._docs_activeCategory = cat;
+    docs_renderList();
+  }
+
+  function docs_addCategory(){
+    const v = (document.getElementById('doc_new_cat').value||'').trim();
+    if(!v) return alert('Enter category name');
+    if(STORE.docCategories.indexOf(v) !== -1) return alert('Category exists');
+    STORE.docCategories.push(v);
+    saveStore();
+    docs_renderCategories();
+    document.getElementById('doc_new_cat').value = '';
+    logActivity(`Document category added: ${v}`);
+    docs_renderList();
+  }
+
+  function docs_openUpload(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const modal = document.createElement('div'); modal.className='modal-backdrop';
+    modal.innerHTML = `<div class="modal" style="width:720px;max-width:96vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Upload Document</div><div><button class="btn ghost" id="docUpClose">Close</button></div></div>
+      <div style="margin-top:8px;">
+        <div class="mini muted">Title</div><input id="doc_title" class="field small" />
+        <div class="mini muted" style="margin-top:8px">Category</div>
+        <select id="doc_cat" class="field small">${STORE.docCategories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select>
+        <div class="mini muted" style="margin-top:8px">Visibility</div>
+        <select id="doc_vis" class="field small"><option value="public">Public</option><option value="private">Private</option></select>
+        <div class="mini muted" style="margin-top:8px">File</div><input id="doc_file" type="file" class="field small" />
+        <div style="margin-top:10px;display:flex;gap:8px"><button class="btn primary" id="docUploadBtn">Upload</button><button class="btn ghost" id="docUploadCancel">Cancel</button></div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('docUpClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('docUploadCancel').addEventListener('click', ()=> modal.remove());
+    document.getElementById('docUploadBtn').addEventListener('click', ()=>{
+      const title = (document.getElementById('doc_title').value||'').trim();
+      const cat = document.getElementById('doc_cat').value;
+      const vis = document.getElementById('doc_vis').value;
+      const file = document.getElementById('doc_file').files[0];
+      if(!title || !file) return alert('Provide title and file');
+      const reader = new FileReader();
+      reader.onload = function(e){
+        const data = e.target.result;
+        const doc = { id: uid('doc'), title, category: cat, visibility: vis, data, dataType: file.type, uploadedAt: new Date().toISOString(), uploadedBy: (SESSION && SESSION.user && SESSION.user.email) || 'admin' };
+        STORE.documents.push(doc);
+        saveStore();
+        logActivity(`Document uploaded: ${title} (${cat}) by ${doc.uploadedBy}`);
+        modal.remove();
+        docs_renderList();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function docs_renderList(){
+    const tbody = document.querySelector('#docs_table tbody');
+    tbody.innerHTML = '';
+    const q = (document.getElementById('doc_search').value||'').toLowerCase();
+    const activeCat = document._docs_activeCategory || '';
+    let list = (STORE.documents||[]).slice().reverse();
+    if(activeCat) list = list.filter(d=> d.category === activeCat);
+    if(q) list = list.filter(d=> (d.title||'').toLowerCase().includes(q) || (d.category||'').toLowerCase().includes(q));
+    list.forEach(d=>{
+      const vis = d.visibility || 'public';
+      const uploaded = new Date(d.uploadedAt).toLocaleString();
+      tbody.insertAdjacentHTML('beforeend', `<tr>
+        <td>${escapeHtml(d.title)}</td>
+        <td>${escapeHtml(d.category)}</td>
+        <td>${escapeHtml(vis)}</td>
+        <td>${escapeHtml(uploaded)}</td>
+        <td>
+          <button class="btn ghost" onclick="docs_view('${d.id}')">View</button>
+          ${SESSION && SESSION.role === 'admin' ? `<button class="btn ghost" onclick="docs_toggleVis('${d.id}')">Toggle Vis</button><button class="btn ghost" onclick="docs_delete('${d.id}')">Delete</button>` : ''}
+        </td>
+      </tr>`);
+    });
+  }
+
+  function docs_view(id){
+    const d = (STORE.documents||[]).find(x=> x.id===id);
+    if(!d) return alert('Document not found');
+    if(d.visibility === 'private' && !(SESSION && (SESSION.role === 'admin' || (SESSION.user && SESSION.user.id === d.uploadedBy)))) return alert('Private document');
+    // open in new window as embedded
+    const w = window.open('');
+    w.document.write(`<iframe src="${d.data}" style="width:100%;height:100vh;border:none"></iframe>`);
+  }
+
+  function docs_toggleVis(id){
+    const d = (STORE.documents||[]).find(x=> x.id===id);
+    if(!d) return alert('Not found');
+    d.visibility = d.visibility === 'public' ? 'private' : 'public';
+    saveStore();
+    docs_renderList();
+    logActivity(`Document visibility toggled: ${d.title} → ${d.visibility}`);
+  }
+
+  function docs_delete(id){
+    if(!confirm('Delete document?')) return;
+    const d = (STORE.documents||[]).find(x=> x.id===id);
+    STORE.documents = (STORE.documents||[]).filter(x=> x.id!==id);
+    saveStore();
+    docs_renderList();
+    logActivity(`Document deleted: ${d && d.title}`);
+  }
+
+  function docs_exportList(){
+    const rows = (STORE.documents||[]).map(d=> ({ Title: d.title, Category: d.category, Visibility: d.visibility, Uploaded: d.uploadedAt, By: d.uploadedBy }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Documents');
+    XLSX.writeFile(wb, 'Documents_List.xlsx');
+  }
+
+  // expose docs functions
+  window.docs_openUpload = docs_openUpload;
+  window.docs_renderList = docs_renderList;
+  window.docs_view = docs_view;
+  window.docs_toggleVis = docs_toggleVis;
+  window.docs_delete = docs_delete;
+  window.docs_addCategory = docs_addCategory;
+  window.docs_exportList = docs_exportList;
+  window.docs_filterCategory = docs_filterCategory;
+
+  // ---------- Settings (S3) ----------
+  function settings_load(){
+    const s = STORE.settings || {};
+    document.getElementById('set_company_name').value = s.companyName || '';
+    document.getElementById('set_color_primary').value = s.colorPrimary || '#3b82f6';
+    // module toggles
+    document.getElementById('mod_recruit').checked = !!(s.modules && s.modules.recruitment);
+    document.getElementById('mod_attendance').checked = !!(s.modules && s.modules.attendance);
+    document.getElementById('mod_leave').checked = !!(s.modules && s.modules.leave);
+    document.getElementById('mod_payroll').checked = !!(s.modules && s.modules.payroll);
+    document.getElementById('mod_ess').checked = !!(s.modules && s.modules.ess);
+    document.getElementById('mod_documents').checked = !!(s.modules && s.modules.documents);
+    document.getElementById('set_late_threshold').value = s.lateThreshold || '09:15';
+    document.getElementById('set_work_hours').value = s.workHours || 8;
+    document.getElementById('set_weekly_off').value = (s.weeklyOff || [0]).join(',');
+    document.getElementById('set_esi_thr').value = s.esiThreshold || 21000;
+    document.getElementById('set_departments').value = (s.departments || []).join(',');
+    document.getElementById('set_holidays').value = (s.holidays || []).join(',');
+    document.getElementById('set_global_pf').checked = !!s.globalPF;
+    // logo preview not needed here
+    // audit
+    renderAudit();
+    // categories & docs
+    docs_renderCategories();
+    docs_renderList();
+  }
+
+  function settings_save(){
+    const s = STORE.settings;
+    s.companyName = document.getElementById('set_company_name').value || s.companyName;
+    s.colorPrimary = document.getElementById('set_color_primary').value || s.colorPrimary;
+    s.modules = {
+      recruitment: document.getElementById('mod_recruit').checked,
+      attendance: document.getElementById('mod_attendance').checked,
+      leave: document.getElementById('mod_leave').checked,
+      payroll: document.getElementById('mod_payroll').checked,
+      ess: document.getElementById('mod_ess').checked,
+      documents: document.getElementById('mod_documents').checked
+    };
+    s.lateThreshold = document.getElementById('set_late_threshold').value || s.lateThreshold;
+    s.workHours = Number(document.getElementById('set_work_hours').value||s.workHours);
+    s.weeklyOff = (document.getElementById('set_weekly_off').value || '0').split(',').map(x=>Number(x.trim())).filter(x=>!isNaN(x));
+    s.esiThreshold = Number(document.getElementById('set_esi_thr').value||s.esiThreshold);
+    s.departments = (document.getElementById('set_departments').value || '').split(',').map(x=>x.trim()).filter(x=>x);
+    s.holidays = (document.getElementById('set_holidays').value || '').split(',').map(x=>x.trim()).filter(x=>x);
+    s.globalPF = document.getElementById('set_global_pf').checked;
+    // persist
+    STORE.settings = s;
+    saveStore();
+    logActivity('Settings updated');
+    alert('Settings saved');
+    // apply theme color (optional)
+    document.documentElement.style.setProperty('--accent', s.colorPrimary || '#3b82f6');
+  }
+
+  function settings_uploadLogo(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt){
+      STORE.settings.logo = evt.target.result;
+      saveStore();
+      alert('Logo saved in settings (in localStorage)');
+      logActivity('Company logo uploaded');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function settings_exportBackup(){
+    const payload = { STORE };
+    const a = document.createElement('a');
+    a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+    a.download = `Konarak_HRMS_Backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+  }
+
+  function settings_importBackup(ev){
+    const file = ev.target.files[0];
+    if(!file) return alert('Select a file');
+    const reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        const obj = JSON.parse(e.target.result);
+        if(obj && obj.STORE){
+          // merge carefully (overwrite)
+          Object.assign(STORE, obj.STORE);
+          saveStore();
+          settings_load();
+          reports_refreshAll();
+          docs_renderCategories();
+          docs_renderList();
+          alert('Backup imported (STORE replaced). Please reload view if necessary.');
+          logActivity('Backup imported');
+        } else alert('Invalid backup file');
+      }catch(err){ alert('Import failed'); console.error(err); }
+    };
+    reader.readAsText(file);
+  }
+
+  function settings_clearAudit(){
+    if(!confirm('Clear audit log?')) return;
+    STORE.activities = [];
+    saveStore();
+    renderAudit();
+    logActivity('Audit cleared');
+  }
+
+  function renderAudit(){
+    const wrap = document.getElementById('audit_log');
+    wrap.innerHTML = '';
+    const items = (STORE.activities||[]).slice().reverse();
+    items.slice(0,200).forEach(it=>{
+      const line = `${new Date(it.time||it.ts||Date.now()).toLocaleString()} — ${escapeHtml(it.msg||JSON.stringify(it))}`;
+      wrap.insertAdjacentHTML('beforeend', `<div class="mini muted" style="padding:6px;border-bottom:1px solid rgba(255,255,255,0.02)">${line}</div>`);
+    });
+  }
+
+  // push to audit
+  function auditPush(msg){
+    STORE.activities = STORE.activities || [];
+    STORE.activities.push({ id: uid('act'), ts: new Date().toISOString(), msg });
+    saveStore();
+    renderAudit();
+  }
+
+  // wire audit to logActivity if exists
+  try{
+    // if logActivity is available, monkey patch to also push to STORE.activities
+    const origLog = window.logActivity;
+    window.logActivity = function(msg){
+      if(typeof origLog === 'function') origLog(msg);
+      auditPush(msg);
+    };
+  }catch(e){ console.warn('Audit hook error', e); }
+
+  // ---------- Initialization when view opens ----------
+  const prevRouteExtra = route;
+  route = function(v){
+    prevRouteExtra(v);
+    try{
+      if(v === 'reports'){
+        // Wait brief to ensure DOM canvas available
+        setTimeout(()=> reports_refreshAll(), 120);
+      }
+      if(v === 'documents'){
+        settings_load();
+        docs_renderCategories();
+        docs_renderList();
+      }
+      if(v === 'settings'){
+        settings_load();
+      }
+    }catch(e){ console.error('reports/docs/settings route err', e); }
+  };
+
+  // Initial load if views present
+  if(document.getElementById('reportsView') && document.getElementById('reportsView').style.display !== 'none'){
+    setTimeout(()=> reports_refreshAll(), 120);
+  }
+  if(document.getElementById('documentsView')){
+    docs_renderCategories();
+    docs_renderList();
+  }
+  if(document.getElementById('settingsView')){
+    settings_load();
+  }
+
+  // Expose settings functions
+  window.settings_save = settings_save;
+  window.settings_load = settings_load;
+  window.settings_exportBackup = settings_exportBackup;
+  window.settings_importBackup = settings_importBackup;
+  window.settings_uploadLogo = settings_uploadLogo;
+  window.settings_clearAudit = settings_clearAudit;
+
+  // ensure charts are cleaned up on unload (defensive)
+  window.addEventListener('beforeunload', ()=> {
+    try{ chartDept && chartDept.destroy(); chartType && chartType.destroy(); chartAttendance && chartAttendance.destroy(); }catch(e){}
+  });
+
+}());
+/* ===========================
+   END PART 9/10/11
+   =========================== */
+
 
 /* ===========================
    End of Part 1 core file
