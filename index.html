@@ -533,7 +533,61 @@
   </div>
 </div>
 <!-- ========== END ATTENDANCE MODULE ========== -->
+<!-- ========== LEAVE MANAGEMENT MODULE (PART 5) ========== -->
+<div id="leaveView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Leave Management</div>
+        <div class="mini muted">Apply, Approve, Balances • Integrated with Attendance</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn primary" onclick="leave_openApply()">Apply Leave</button>
+        <button class="btn ghost" onclick="leave_openTypeManager()">Leave Types</button>
+        <button class="btn ghost" onclick="leave_exportExcel()">Export Leave Register</button>
+      </div>
+    </div>
 
+    <!-- Top summary -->
+    <div style="display:flex;gap:12px;margin-top:12px;">
+      <div class="section" style="flex:1">
+        <div class="mini muted">My Balance (if employee) / Company Summary</div>
+        <div id="leaveBalanceSummary" style="margin-top:8px;"></div>
+      </div>
+      <div class="section" style="flex:1">
+        <div class="mini muted">Pending Approvals</div>
+        <div id="leavePendingCount" style="font-weight:900;font-size:22px;margin-top:8px;">0</div>
+      </div>
+    </div>
+
+    <!-- Filter and list -->
+    <div style="margin-top:12px" class="section">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="leaveSearch" class="field small" placeholder="Search by employee, date, type..." oninput="leave_renderList()" />
+        <select id="leaveFilterStatus" class="field small" onchange="leave_renderList()">
+          <option value="">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Rejected">Rejected</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+        <select id="leaveFilterType" class="field small" onchange="leave_renderList()"><option value="">All Types</option></select>
+        <div style="margin-left:auto" class="mini muted">Total leaves: <strong id="leaveTotal">0</strong></div>
+      </div>
+
+      <div style="margin-top:10px; overflow:auto; max-height:420px;">
+        <table id="leaveTable">
+          <thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Applied</th><th>Actions</th></tr></thead>
+          <tbody id="leaveTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ========== END LEAVE MANAGEMENT MODULE ========== -->
+
+
+      
 
       <!-- Payroll placeholder -->
       <div id="payrollView" style="display:none;">
@@ -2394,6 +2448,382 @@ window.cand_exportExcel = cand_exportExcel;
 }());
 /* ===========================
    END PART 4
+   =========================== */
+/* ===========================
+   PART 5: Leave Management Module
+   - Leave types, apply, approve, balances
+   - Integrates with STORE.leaves and Attendance (STORE.attendance)
+   - Requires: STORE, saveStore(), uid(), emp_find(), logActivity(), escapeHtml()
+   =========================== */
+
+(function(){
+  // Default leave types (editable)
+  const DEFAULT_TYPES = [
+    { id: 'annual', name: 'Annual Leave', entitlement: 18, carryForward: true },
+    { id: 'sick', name: 'Sick Leave', entitlement: 12, carryForward: false },
+    { id: 'casual', name: 'Casual Leave', entitlement: 8, carryForward: false },
+    { id: 'unpaid', name: 'Unpaid Leave', entitlement: 0, carryForward: false }
+  ];
+
+  // Initialize types in STORE if not present
+  if(!STORE.leaveTypes || !Array.isArray(STORE.leaveTypes) || STORE.leaveTypes.length === 0) {
+    STORE.leaveTypes = JSON.parse(JSON.stringify(DEFAULT_TYPES));
+    saveStore();
+  }
+
+  /* -------------------------
+     Utility helpers
+     ------------------------- */
+  function leave_daysBetween(fromDate, toDate){
+    const f = new Date(fromDate + 'T00:00:00');
+    const t = new Date(toDate + 'T00:00:00');
+    const ms = t - f;
+    return Math.round(ms / (1000*60*60*24)) + 1;
+  }
+
+  function leave_getType(id){ return (STORE.leaveTypes||[]).find(x=>x.id===id) || null; }
+
+  /* -------------------------
+     Apply leave (employee) modal
+     ------------------------- */
+  function leave_openApply(){
+    if(!SESSION || !SESSION.user) return alert('Sign in to apply for leave');
+    const modal = document.createElement('div'); modal.className='modal-backdrop';
+    // build types options
+    const typesHtml = (STORE.leaveTypes||[]).map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');
+    modal.innerHTML = `<div class="modal" style="width:640px;max-width:96vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Apply Leave</div><div><button class="btn ghost" id="leaveApplyClose">Close</button></div></div>
+      <div style="margin-top:8px;">
+        <div class="mini muted">Employee: ${escapeHtml(SESSION.user.fullname || SESSION.user.email)}</div>
+        <div style="margin-top:8px"><select id="leave_type_sel" class="field small">${typesHtml}</select></div>
+        <div style="margin-top:8px" class="row"><div class="col"><input id="leave_from" type="date" class="field small"></div><div class="col"><input id="leave_to" type="date" class="field small"></div></div>
+        <div style="margin-top:8px"><input id="leave_reason" class="field small" placeholder="Reason / Notes"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn primary" id="leaveApplySave">Apply</button><button class="btn ghost" id="leaveApplyCancel">Cancel</button></div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('leaveApplyClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('leaveApplyCancel').addEventListener('click', ()=> modal.remove());
+    document.getElementById('leaveApplySave').addEventListener('click', ()=>{
+      const type = document.getElementById('leave_type_sel').value;
+      const from = document.getElementById('leave_from').value;
+      const to = document.getElementById('leave_to').value;
+      const reason = document.getElementById('leave_reason').value || '';
+      if(!type || !from || !to) return alert('Please select type and dates');
+      if(new Date(to) < new Date(from)) return alert('To date cannot be before From date');
+      // compute days
+      const days = leave_daysBetween(from,to);
+      const rec = {
+        id: uid('leave'),
+        employeeId: SESSION.user.id,
+        employeeName: SESSION.user.fullname || SESSION.user.email,
+        type,
+        from,
+        to,
+        days,
+        reason,
+        status: 'Pending',
+        appliedAt: new Date().toISOString(),
+        decidedAt: null,
+        decidedBy: null
+      };
+      STORE.leaves = STORE.leaves || [];
+      STORE.leaves.push(rec);
+      saveStore();
+      modal.remove();
+      leave_renderList();
+      logActivity(`Leave applied by ${rec.employeeName}: ${rec.type} ${rec.from}→${rec.to} (${rec.days})`);
+      alert('Leave applied successfully (Pending approval)');
+    });
+  }
+
+  /* -------------------------
+     Leave type manager modal (admin)
+     ------------------------- */
+  function leave_openTypeManager(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const modal = document.createElement('div'); modal.className='modal-backdrop';
+    const types = STORE.leaveTypes || [];
+    const rows = types.map(t=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.02)"><input value="${escapeHtml(t.id)}" readonly class="field small" style="width:140px"/><input value="${escapeHtml(t.name)}" class="field small type_name" data-id="${escapeHtml(t.id)}"/><input value="${escapeHtml(t.entitlement)}" class="field small type_ent" data-id="${escapeHtml(t.id)}"/><button class="btn ghost" onclick="leave_deleteType('${escapeHtml(t.id)}')">Delete</button></div>`).join('');
+    modal.innerHTML = `<div class="modal" style="width:760px;max-width:96vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Leave Types</div><div><button class="btn ghost" id="leaveTypesClose">Close</button></div></div>
+      <div style="margin-top:8px;">
+        <div style="font-weight:800">Existing Types</div>
+        <div style="margin-top:6px">${rows}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+          <input id="new_type_id" placeholder="id (e.g., comp-off)" class="field small" />
+          <input id="new_type_name" placeholder="Type name" class="field small" />
+          <input id="new_type_ent" type="number" placeholder="Entitlement (days/year)" class="field small" />
+          <button class="btn primary" id="newTypeAdd">Add</button>
+        </div>
+        <div style="margin-top:8px"><button class="btn ghost" id="saveTypeChanges">Save Changes</button></div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('leaveTypesClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('newTypeAdd').addEventListener('click', ()=>{
+      const id = (document.getElementById('new_type_id').value || '').trim();
+      const name = (document.getElementById('new_type_name').value || '').trim();
+      const ent = Number(document.getElementById('new_type_ent').value || 0);
+      if(!id || !name) return alert('Provide id and name');
+      if((STORE.leaveTypes||[]).find(x=>x.id===id)) return alert('Type id already exists');
+      STORE.leaveTypes.push({ id, name, entitlement: ent, carryForward: false });
+      saveStore();
+      modal.remove();
+      leave_openTypeManager(); // reopen to refresh
+    });
+    document.getElementById('saveTypeChanges').addEventListener('click', ()=>{
+      // capture modified names/entitlements
+      const names = modal.querySelectorAll('.type_name');
+      const ents = modal.querySelectorAll('.type_ent');
+      names.forEach(n => {
+        const id = n.dataset.id;
+        const t = STORE.leaveTypes.find(x=>x.id===id);
+        if(t) t.name = n.value;
+      });
+      ents.forEach(en => {
+        const id = en.dataset.id;
+        const t = STORE.leaveTypes.find(x=>x.id===id);
+        if(t) t.entitlement = Number(en.value||0);
+      });
+      saveStore();
+      alert('Leave types updated');
+      modal.remove();
+    });
+  }
+
+  function leave_deleteType(id){
+    if(!confirm('Delete leave type? Existing leaves will keep the type text.')) return;
+    STORE.leaveTypes = (STORE.leaveTypes||[]).filter(x=>x.id !== id);
+    saveStore();
+    logActivity(`Leave type deleted: ${id}`);
+    leave_openTypeManager();
+  }
+
+  /* -------------------------
+     Render leave list
+     ------------------------- */
+  function leave_renderList(){
+    const tbody = document.getElementById('leaveTableBody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    const q = (document.getElementById('leaveSearch').value || '').trim().toLowerCase();
+    const statusFilter = (document.getElementById('leaveFilterStatus').value || '');
+    const typeFilter = (document.getElementById('leaveFilterType').value || '');
+    let list = (STORE.leaves || []).slice().reverse();
+    // if employee role, show only own
+    if(SESSION && SESSION.role === 'employee') list = list.filter(l => l.employeeId === SESSION.user.id);
+    if(q) list = list.filter(l => (l.employeeName||'').toLowerCase().includes(q) || (l.reason||'').toLowerCase().includes(q));
+    if(statusFilter) list = list.filter(l => l.status === statusFilter);
+    if(typeFilter) list = list.filter(l => l.type === typeFilter);
+    list.forEach(l=>{
+      const typeName = (leave_getType(l.type) || {}).name || l.type || '';
+      tbody.insertAdjacentHTML('beforeend', `<tr>
+        <td>${escapeHtml(l.employeeName)}</td>
+        <td>${escapeHtml(typeName)}</td>
+        <td>${escapeHtml(l.from)}</td>
+        <td>${escapeHtml(l.to)}</td>
+        <td>${escapeHtml(String(l.days))}</td>
+        <td>${escapeHtml(l.status)}</td>
+        <td>${new Date(l.appliedAt).toLocaleDateString()}</td>
+        <td>
+          ${l.status === 'Pending' && SESSION && SESSION.role === 'admin' ? `<button class="btn primary" onclick="leave_approve('${l.id}')">Approve</button><button class="btn ghost" onclick="leave_reject('${l.id}')">Reject</button>` : ''}
+          ${l.status === 'Approved' && SESSION && SESSION.role === 'admin' ? `<button class="btn ghost" onclick="leave_cancelApproval('${l.id}')">Cancel Approval</button>` : ''}
+          ${SESSION && l.employeeId === (SESSION.user && SESSION.user.id) && l.status === 'Pending' ? `<button class="btn ghost" onclick="leave_withdraw('${l.id}')">Withdraw</button>` : ''}
+        </td>
+      </tr>`);
+    });
+    document.getElementById('leaveTotal').innerText = (STORE.leaves||[]).length;
+    // update filters types
+    const typeSel = document.getElementById('leaveFilterType');
+    typeSel.innerHTML = '<option value="">All Types</option>' + (STORE.leaveTypes||[]).map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');
+    // update pending count
+    const pending = (STORE.leaves||[]).filter(l=> l.status === 'Pending').length;
+    document.getElementById('leavePendingCount').innerText = pending;
+    // update balances summary
+    leave_renderBalanceSummary();
+  }
+
+  /* -------------------------
+     Approve / Reject / Withdraw / Cancel approval
+     ------------------------- */
+  function leave_approve(id){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const l = (STORE.leaves||[]).find(x=>x.id===id);
+    if(!l) return alert('Leave not found');
+    if(l.status !== 'Pending') return alert('Only pending leaves can be approved');
+    // deduct from balances if entitlement exists
+    const type = leave_getType(l.type);
+    // compute days
+    const days = l.days || leave_daysBetween(l.from, l.to);
+    // update record
+    l.status = 'Approved';
+    l.decidedAt = new Date().toISOString();
+    l.decidedBy = SESSION.user.email || SESSION.user.name || 'admin';
+    saveStore();
+    // write to attendance: mark those dates as leave so calendar shows yellow
+    for(let d=0; d<days; d++){
+      const date = new Date(l.from); date.setDate(date.getDate() + d);
+      const key = date.toISOString().slice(0,10);
+      // create attendance record for this employee/date marked as leave
+      const rec = att_getRecord ? att_getRecord(l.employeeId, key) : null;
+      if(rec){
+        rec.note = (rec.note || '') + ' Leave approved';
+        rec.leaveType = l.type;
+        rec.status = 'Leave';
+        rec.updatedAt = new Date().toISOString();
+        att_saveRecord(rec);
+      } else {
+        const newRec = {
+          id: uid('att'),
+          employeeId: l.employeeId,
+          employeeName: l.employeeName,
+          employeeCode: (emp_find(l.employeeId) || {}).code || '',
+          date: key,
+          checkIn: null, checkOut: null, hours: 0, late:false, earlyExit:false, overtime:0,
+          note: 'Leave approved',
+          leaveType: l.type,
+          status: 'Leave',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        STORE.attendance = STORE.attendance || [];
+        STORE.attendance.push(newRec);
+      }
+    }
+    saveStore();
+    leave_renderList();
+    att_renderAll && att_renderAll();
+    logActivity(`Leave approved: ${l.employeeName} ${l.from}→${l.to} (${l.days}) by ${SESSION.user.email||SESSION.user.name}`);
+    alert('Leave approved');
+  }
+
+  function leave_reject(id){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const l = (STORE.leaves||[]).find(x=>x.id===id);
+    if(!l) return alert('Leave not found');
+    l.status = 'Rejected';
+    l.decidedAt = new Date().toISOString();
+    l.decidedBy = SESSION.user.email || SESSION.user.name || 'admin';
+    saveStore();
+    leave_renderList();
+    logActivity(`Leave rejected: ${l.employeeName} ${l.from}→${l.to}`);
+    alert('Leave rejected');
+  }
+
+  function leave_withdraw(id){
+    // employee withdraw pending leave
+    if(!SESSION || !SESSION.user) return alert('Sign in');
+    const l = (STORE.leaves||[]).find(x=>x.id===id);
+    if(!l) return alert('Leave not found');
+    if(l.employeeId !== SESSION.user.id) return alert('Not allowed');
+    if(l.status !== 'Pending') return alert('Only pending leaves can be withdrawn');
+    l.status = 'Cancelled';
+    l.decidedAt = new Date().toISOString();
+    saveStore();
+    leave_renderList();
+    logActivity(`Leave withdrawn by ${SESSION.user.email || SESSION.user.fullname}`);
+    alert('Leave withdrawn');
+  }
+
+  function leave_cancelApproval(id){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const l = (STORE.leaves||[]).find(x=>x.id===id);
+    if(!l) return alert('Leave not found');
+    if(l.status !== 'Approved') return alert('Only approved leaves can be cancelled here');
+    // remove leave marks from attendance for the date range
+    const days = l.days || leave_daysBetween(l.from, l.to);
+    for(let d=0; d<days; d++){
+      const date = new Date(l.from); date.setDate(date.getDate() + d);
+      const key = date.toISOString().slice(0,10);
+      STORE.attendance = (STORE.attendance||[]).filter(r => !(r.employeeId === l.employeeId && r.date === key && r.status === 'Leave'));
+    }
+    l.status = 'Cancelled';
+    l.decidedAt = new Date().toISOString();
+    saveStore();
+    leave_renderList();
+    att_renderAll && att_renderAll();
+    logActivity(`Leave approval cancelled: ${l.employeeName} ${l.from}→${l.to}`);
+    alert('Leave approval cancelled and attendance adjusted');
+  }
+
+  /* -------------------------
+     Leave balances summary & quick view
+     ------------------------- */
+  function leave_renderBalanceSummary(){
+    const summaryEl = document.getElementById('leaveBalanceSummary');
+    if(!summaryEl) return;
+    // If employee, show only their balances
+    if(SESSION && SESSION.role === 'employee'){
+      const empId = SESSION.user.id;
+      const entitlements = (STORE.leaveTypes||[]).map(t => {
+        // compute used days for this employee and type for current year
+        const year = new Date().getFullYear();
+        const used = (STORE.leaves||[]).filter(l => l.employeeId === empId && l.type === t.id && l.status === 'Approved' && new Date(l.from).getFullYear() === year).reduce((s,x)=>s + (x.days||0), 0);
+        const balance = t.entitlement - used;
+        return `<div class="mini">${escapeHtml(t.name)}: <strong>${balance}</strong> / ${t.entitlement}</div>`;
+      }).join('');
+      summaryEl.innerHTML = entitlements;
+    } else {
+      // admin/company view summary: total leaves by type (year)
+      const counts = (STORE.leaveTypes||[]).map(t => {
+        const used = (STORE.leaves||[]).filter(l=> l.type === t.id && l.status === 'Approved').reduce((s,x)=>s + (x.days||0),0);
+        return `<div class="mini">${escapeHtml(t.name)} used: <strong>${used}</strong> days</div>`;
+      }).join('');
+      summaryEl.innerHTML = counts;
+    }
+  }
+
+  /* -------------------------
+     Export leave register to Excel
+     ------------------------- */
+  function leave_exportExcel(){
+    const rows = (STORE.leaves||[]).map(l => ({ Employee: l.employeeName, Type: (leave_getType(l.type)||{}).name || l.type, From: l.from, To: l.to, Days: l.days, Status: l.status, Applied: l.appliedAt }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Leaves');
+    XLSX.writeFile(wb, 'LeaveRegister.xlsx');
+  }
+
+  /* -------------------------
+     Init and renders
+     ------------------------- */
+  function leave_init(){
+    // ensure arrays
+    STORE.leaves = STORE.leaves || [];
+    // populate filter type select
+    const sel = document.getElementById('leaveFilterType');
+    if(sel) sel.innerHTML = '<option value="">All Types</option>' + (STORE.leaveTypes || []).map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');
+    leave_renderList();
+  }
+
+  // expose global functions
+  window.leave_openApply = leave_openApply;
+  window.leave_openTypeManager = leave_openTypeManager;
+  window.leave_renderList = leave_renderList;
+  window.leave_approve = leave_approve;
+  window.leave_reject = leave_reject;
+  window.leave_withdraw = leave_withdraw;
+  window.leave_cancelApproval = leave_cancelApproval;
+  window.leave_exportExcel = leave_exportExcel;
+
+  // hook into route to initialize when view opened
+  const prevRouteLeave = route;
+  route = function(v){
+    prevRouteLeave(v);
+    try{
+      if(v === 'leave') leave_init();
+    }catch(e){ console.error('leave route err', e); }
+  };
+
+  // initial call if on leave view
+  if(document.getElementById('leaveView').style.display !== 'none'){
+    leave_init();
+  }
+
+}());
+/* ===========================
+   END PART 5
    =========================== */
 
   
