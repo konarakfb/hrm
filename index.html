@@ -1,875 +1,251 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Konarak HRMS — Demo (Client-only)</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konarak HRMS</title>
 
-  <!-- Tailwind (play CDN for quick styling) -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind (used only for spacing + responsiveness) -->
+<script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Icons (Heroicons CDN) -->
-  <script src="https://unpkg.com/feather-icons"></script>
+<!-- SheetJS for Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-  <!-- QR code generator -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- jsPDF + html2canvas for PDF generation -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+<!-- html2canvas -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-  <!-- SheetJS for Excel export -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+    body {
+        background: #f3f4f6;
+        font-family: Arial, sans-serif;
+    }
 
-  <!-- jsQR for scanning QR codes via camera -->
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    .section-title {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
 
-  <style>
-    /* Extra UI niceties */
-    body { background: linear-gradient(180deg,#0f172a 0%, #071033 100%); color: #e6eef8; }
-    .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.04); }
-    .accent { color: #7c3aed; }
-    .card { border-radius: 14px; box-shadow: 0 6px 30px rgba(0,0,0,0.6); }
-    input, textarea { background: rgba(255,255,255,0.03); color: inherit; }
-    .table-friendly td, .table-friendly th { padding: .5rem .75rem; border-bottom: 1px dashed rgba(255,255,255,0.04); }
-    .btn { @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium; }
-  </style>
+    .form-box {
+        background: white;
+        padding: 18px;
+        border-radius: 10px;
+        margin-bottom: 14px;
+        border: 1px solid #e5e7eb;
+    }
+
+    .data-table th {
+        background: #374151;
+        color: white;
+        padding: 10px;
+        text-align: left;
+    }
+
+    .data-table td {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+        background: white;
+    }
+
+    .btn {
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+
+    .btn-primary {
+        background: #2563eb;
+        color: white;
+    }
+
+    .btn-danger {
+        background: #dc2626;
+        color: white;
+    }
+
+    .btn-secondary {
+        background: #4b5563;
+        color: white;
+    }
+
+</style>
 </head>
-<body class="min-h-screen antialiased">
+<body class="p-6">
 
-  <div class="max-w-7xl mx-auto p-6">
-    <header class="flex items-center justify-between mb-6">
-      <div class="flex items-center gap-4">
-        <div class="w-14 h-14 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-white text-xl font-bold card">KF</div>
-        <div>
-          <h1 class="text-2xl font-semibold">Konarak HRMS — Demo</h1>
-          <p class="text-sm text-gray-300">Client-only prototype — localStorage | QR attendance | PDF/Excel export</p>
-        </div>
-      </div>
+<!-----------------------------
+     HEADER
+------------------------------>
+<div class="bg-white p-5 rounded-xl shadow mb-6">
+    <h1 class="text-3xl font-bold">Konarak HRMS</h1>
+    <p class="text-gray-600">LocalStorage HRMS • GitHub Pages Compatible</p>
+</div>
 
-      <div class="flex items-center gap-4">
-        <button id="exportAllExcel" class="btn bg-white/6 hover:bg-white/10 card">Export All Excel</button>
-        <button id="exportAllPdf" class="btn bg-white/6 hover:bg-white/10 card">Export Dashboard PDF</button>
-        <button id="clearAll" class="btn bg-red-600 hover:bg-red-700 card">Clear Data</button>
-      </div>
-    </header>
 
-    <main class="grid md:grid-cols-4 gap-6">
-      <!-- NAV -->
-      <nav class="md:col-span-1 glass p-4 card">
-        <ul class="space-y-2">
-          <li><button data-tab="dashboard" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">Dashboard</button></li>
-          <li><button data-tab="employees" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">Employees</button></li>
-          <li><button data-tab="attendance" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">Attendance (QR)</button></li>
-          <li><button data-tab="documents" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">Documents</button></li>
-          <li><button data-tab="leave" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">Leave</button></li>
-          <li><button data-tab="payroll" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">Payroll</button></li>
-          <li><button data-tab="idcards" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">ID Cards & QR</button></li>
-          <li><button data-tab="settings" class="tabBtn w-full text-left py-2 px-3 rounded-lg hover:bg-white/3">Settings / Help</button></li>
-        </ul>
-      </nav>
+<!-----------------------------
+   EMPLOYEE FORM SECTION
+------------------------------>
+<div class="form-box">
+    <div class="section-title">Add Employee</div>
 
-      <!-- CONTENT -->
-      <section class="md:col-span-3 space-y-6">
-        <!-- Dashboard -->
-        <div id="dashboard" class="tabPanel glass p-6 card">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-semibold">Dashboard</h2>
-            <div class="text-sm text-gray-300">Local demo · GitHub Pages friendly</div>
-          </div>
-          <div class="grid grid-cols-3 gap-4 mt-4">
-            <div class="p-4 card">
-              <div class="text-sm text-gray-300">Employees</div>
-              <div id="statEmployees" class="text-3xl font-bold mt-2">0</div>
-            </div>
-            <div class="p-4 card">
-              <div class="text-sm text-gray-300">Attendance logs</div>
-              <div id="statAttendance" class="text-3xl font-bold mt-2">0</div>
-            </div>
-            <div class="p-4 card">
-              <div class="text-sm text-gray-300">Leaves (pending)</div>
-              <div id="statLeaves" class="text-3xl font-bold mt-2">0</div>
-            </div>
-          </div>
+    <div class="grid grid-cols-1 gap-4">
 
-          <div class="mt-6 grid grid-cols-2 gap-4">
-            <div class="card p-4">
-              <h3 class="font-semibold">Recent Employees</h3>
-              <div id="recentEmployees" class="mt-2 text-sm text-gray-200"></div>
-            </div>
+        <input id="empName" class="p-3 border rounded-lg" placeholder="Employee Full Name">
 
-            <div class="card p-4">
-              <h3 class="font-semibold">Recent Attendance</h3>
-              <div id="recentAttendance" class="mt-2 text-sm text-gray-200"></div>
-            </div>
-          </div>
-        </div>
+        <input id="empCode" class="p-3 border rounded-lg" placeholder="Employee Code (e.g., EMP1021)">
 
-        <!-- Employees -->
-        <div id="employees" class="tabPanel hidden glass p-6 card">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-semibold">Employees</h2>
-            <div>
-              <button id="downloadEmployeesExcel" class="btn bg-white/6 card">Download Excel</button>
-              <button id="downloadEmployeesPdf" class="btn bg-white/6 card">Download PDF</button>
-              <button id="newEmployeeBtn" class="btn bg-indigo-600 hover:bg-indigo-700 card">+ New Employee</button>
-            </div>
-          </div>
+        <input id="empPhone" class="p-3 border rounded-lg" placeholder="Phone Number">
 
-          <!-- list -->
-          <div class="mt-4 card p-3 overflow-auto max-h-96">
-            <table class="w-full text-left">
-              <thead class="text-sm text-gray-300">
+        <input id="empDesignation" class="p-3 border rounded-lg" placeholder="Designation">
+
+        <input id="empSalary" type="number" class="p-3 border rounded-lg" placeholder="Basic Salary">
+
+        <button onclick="addEmployee()" class="btn btn-primary w-full">Save Employee</button>
+    </div>
+</div>
+
+
+<!-----------------------------
+   EMPLOYEE DATA TABLE
+------------------------------>
+<div class="form-box">
+    <div class="section-title">Employee List</div>
+
+    <div class="flex gap-3 mb-4">
+        <button onclick="exportEmployeesPDF()" class="btn btn-secondary">Export PDF</button>
+        <button onclick="exportEmployeesExcel()" class="btn btn-primary">Export Excel</button>
+        <button onclick="clearEmployees()" class="btn btn-danger">Clear All</button>
+    </div>
+
+    <div class="overflow-auto">
+        <table class="data-table w-full" id="empTable">
+            <thead>
                 <tr>
-                  <th>#</th><th>Name</th><th>Code</th><th>Designation</th><th>Phone</th><th>Actions</th>
+                    <th>Name</th>
+                    <th>Code</th>
+                    <th>Phone</th>
+                    <th>Designation</th>
+                    <th>Salary</th>
                 </tr>
-              </thead>
-              <tbody id="employeeTable" class="text-sm"></tbody>
-            </table>
-          </div>
-        </div>
+            </thead>
+            <tbody id="employeeBody"></tbody>
+        </table>
+    </div>
+</div>
 
-        <!-- Attendance -->
-        <div id="attendance" class="tabPanel hidden glass p-6 card">
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-semibold">Attendance (QR Scan)</h2>
-            <div class="text-sm text-gray-300">Use camera to scan QR or use the "Manual Scan" input</div>
-          </div>
 
-          <div class="mt-4 grid md:grid-cols-2 gap-4">
-            <div class="card p-4">
-              <h3 class="font-semibold">Scan with camera</h3>
-              <video id="video" class="w-full rounded-md" style="background:#000" autoplay muted playsinline></video>
-              <div class="flex gap-2 mt-3">
-                <button id="startCamera" class="btn bg-green-600 card">Start Camera</button>
-                <button id="stopCamera" class="btn bg-gray-700 card">Stop</button>
-                <button id="manualScanBtn" class="btn bg-indigo-600 card">Manual Scan Token</button>
-              </div>
-              <div id="scanResult" class="mt-3 text-sm"></div>
-            </div>
-
-            <div class="card p-4">
-              <h3 class="font-semibold">Attendance Log</h3>
-              <div class="mt-2 max-h-80 overflow-auto">
-                <table class="w-full text-sm">
-                  <thead class="text-gray-300"><tr><th>Time</th><th>Employee</th><th>Type</th></tr></thead>
-                  <tbody id="attendanceTable"></tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Documents -->
-        <div id="documents" class="tabPanel hidden glass p-6 card">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-semibold">Documents</h2>
-            <div class="text-sm text-gray-300">Upload and download employee documents</div>
-          </div>
-
-          <div class="mt-4 grid md:grid-cols-2 gap-4">
-            <div class="card p-4">
-              <h3 class="font-semibold">Upload Document</h3>
-              <div class="mt-2">
-                <label class="block text-sm">Select Employee</label>
-                <select id="docEmployee" class="w-full p-2 mt-1 rounded-md"></select>
-                <label class="block text-sm mt-2">Document Type</label>
-                <input id="docType" class="w-full p-2 mt-1 rounded-md" placeholder="e.g., PAN / Aadhaar / Offer letter">
-                <label class="block text-sm mt-2">Choose File</label>
-                <input id="docFile" type="file" class="w-full mt-1">
-                <button id="uploadDocBtn" class="btn bg-indigo-600 mt-3 card">Upload</button>
-              </div>
-            </div>
-
-            <div class="card p-4">
-              <h3 class="font-semibold">Employee Documents</h3>
-              <div id="docsList" class="mt-2 text-sm max-h-80 overflow-auto"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Leave -->
-        <div id="leave" class="tabPanel hidden glass p-6 card">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-semibold">Leave Management</h2>
-            <div class="text-sm text-gray-300">Apply and approve leaves</div>
-          </div>
-
-          <div class="mt-4 grid md:grid-cols-2 gap-4">
-            <div class="card p-4">
-              <h3 class="font-semibold">Apply Leave</h3>
-              <label class="block text-sm mt-2">Employee</label>
-              <select id="leaveEmployee" class="w-full p-2 mt-1 rounded-md"></select>
-              <label class="block text-sm mt-2">Type</label>
-              <select id="leaveType" class="w-full p-2 mt-1 rounded-md">
-                <option>Casual</option><option>Sick</option><option>Paid</option>
-              </select>
-              <label class="block text-sm mt-2">From</label>
-              <input id="leaveFrom" type="date" class="w-full p-2 mt-1 rounded-md">
-              <label class="block text-sm mt-2">To</label>
-              <input id="leaveTo" type="date" class="w-full p-2 mt-1 rounded-md">
-              <button id="applyLeaveBtn" class="btn bg-indigo-600 mt-3 card">Apply</button>
-            </div>
-
-            <div class="card p-4">
-              <h3 class="font-semibold">Pending Leaves</h3>
-              <div id="leaveList" class="mt-2 text-sm max-h-80 overflow-auto"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Payroll -->
-        <div id="payroll" class="tabPanel hidden glass p-6 card">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-semibold">Payroll</h2>
-            <div class="text-sm text-gray-300">Basic payroll engine & payslip PDF</div>
-          </div>
-
-          <div class="mt-4 grid md:grid-cols-2 gap-4">
-            <div class="card p-4">
-              <h3 class="font-semibold">Generate Payroll</h3>
-              <label class="block text-sm mt-2">Employee</label>
-              <select id="payEmployee" class="w-full p-2 mt-1 rounded-md"></select>
-              <label class="block text-sm mt-2">Month</label>
-              <input id="payMonth" type="month" class="w-full p-2 mt-1 rounded-md">
-              <label class="block text-sm mt-2">Overtime Hours</label>
-              <input id="otHours" type="number" class="w-full p-2 mt-1 rounded-md" value="0">
-              <label class="block text-sm mt-2">Other Deductions</label>
-              <input id="otherDed" type="number" class="w-full p-2 mt-1 rounded-md" value="0">
-              <button id="generatePayrollBtn" class="btn bg-indigo-600 mt-3 card">Generate Payslip</button>
-            </div>
-
-            <div class="card p-4">
-              <h3 class="font-semibold">Payroll Records</h3>
-              <div id="payrollList" class="mt-2 text-sm max-h-80 overflow-auto"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ID Cards & QR -->
-        <div id="idcards" class="tabPanel hidden glass p-6 card">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-semibold">ID Cards & QR</h2>
-            <div class="text-sm text-gray-300">Create printable ID with embedded QR</div>
-          </div>
-
-          <div class="mt-4 grid md:grid-cols-3 gap-4">
-            <div class="card p-4">
-              <label class="block text-sm">Select Employee</label>
-              <select id="idEmployee" class="w-full p-2 mt-1 rounded-md"></select>
-              <div id="qrcodePreview" class="mt-4"></div>
-              <div class="mt-3 flex gap-2">
-                <button id="downloadIdPdf" class="btn bg-indigo-600 card">Download ID PDF</button>
-                <button id="downloadQrPng" class="btn bg-white/6 card">Download QR PNG</button>
-              </div>
-            </div>
-
-            <div class="md:col-span-2 card p-4">
-              <h3 class="font-semibold">Preview ID Card</h3>
-              <div id="idPreviewArea" class="mt-3 p-4 bg-white/5 rounded-lg text-black" style="color:black;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Settings -->
-        <div id="settings" class="tabPanel hidden glass p-6 card">
-          <h2 class="text-xl font-semibold">Settings & Help</h2>
-          <div class="mt-3 text-sm text-gray-300">
-            <p><strong>How to publish:</strong> create a GitHub repo, add this file as <code>index.html</code>, commit and push. In repo Settings → Pages, choose branch <code>main</code> (or <code>gh-pages</code>) and root. Your site will be published on GitHub Pages.</p>
-            <p class="mt-2"><strong>Exporting:</strong> Use the PDF / Excel buttons. All lists can be exported.</p>
-            <p class="mt-2"><strong>Security:</strong> This demo stores data locally in your browser. For production use a server with authentication and encrypted storage.</p>
-          </div>
-        </div>
-
-      </section>
-    </main>
-
-    <footer class="mt-8 text-sm text-gray-400">Konarak HRMS — Demo • Client-only prototype • Local browser data</footer>
-  </div>
 
 <script>
-/* ===========================
-   Konarak HRMS — Client-only
-   Uses: localStorage, jsPDF, xlsx, qrcodejs, jsQR, html2canvas
-   =========================== */
-
-const LS_KEY = 'konarak_hrms_v1';
-
-/* ---------- Utilities: storage ---------- */
-function loadState() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : {
-      employees: [],
-      attendance: [],
-      documents: [],
-      leaves: [],
-      payroll: []
-    };
-  } catch(e) { return {employees:[],attendance:[],documents:[],leaves:[],payroll:[]}; }
-}
-function saveState(state) { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
-let state = loadState();
-
-/* ---------- Helpers ---------- */
-function uid(prefix='id') { return prefix + '_' + Math.random().toString(36).slice(2,10); }
-function nowISO() { return new Date().toISOString(); }
-function formatDate(d) { if(!d) return ''; d = new Date(d); return d.toLocaleString(); }
-function toCurrency(n){ return Number(n||0).toFixed(2); }
-
-/* ---------- UI: Tabs ---------- */
-document.querySelectorAll('.tabBtn').forEach(b=>{
-  b.addEventListener('click', ()=> {
-    document.querySelectorAll('.tabPanel').forEach(p=>p.classList.add('hidden'));
-    document.querySelectorAll('.tabBtn').forEach(x=>x.classList.remove('bg-white/5'));
-    document.getElementById(b.dataset.tab).classList.remove('hidden');
-    b.classList.add('bg-white/5');
-    if(b.dataset.tab === 'employees') renderEmployees();
-    if(b.dataset.tab === 'dashboard') renderDashboard();
-    if(b.dataset.tab === 'attendance') renderAttendance();
-    if(b.dataset.tab === 'documents') renderDocEmployees();
-    if(b.dataset.tab === 'leave') renderLeaves();
-    if(b.dataset.tab === 'payroll') renderPayrollLists();
-    if(b.dataset.tab === 'idcards') renderIdCardSelection();
-  });
-});
-// start on dashboard
-document.querySelector('[data-tab="dashboard"]').click();
-
-/* ---------- Dashboard ---------- */
-function renderDashboard(){
-  state = loadState();
-  document.getElementById('statEmployees').innerText = state.employees.length;
-  document.getElementById('statAttendance').innerText = state.attendance.length;
-  const pendingLeaves = state.leaves.filter(l=>l.status==='pending').length;
-  document.getElementById('statLeaves').innerText = pendingLeaves;
-
-  const recentE = state.employees.slice(-5).reverse().map(e=>`<div class="py-1">${e.firstName} ${e.lastName||''} <span class="text-xs text-gray-400">(${e.code})</span></div>`).join('') || '<div class="text-gray-400">No employees</div>';
-  document.getElementById('recentEmployees').innerHTML = recentE;
-
-  const recA = state.attendance.slice(-8).reverse().map(a=>{
-    const emp = state.employees.find(x=>x.id===a.employeeId) || {firstName:'Unknown'};
-    return `<div class="py-1 text-sm">${formatDate(a.time)} — <strong>${emp.firstName}</strong> — <span class="text-xs">${a.type}</span></div>`;
-  }).join('') || '<div class="text-gray-400">No logs</div>';
-  document.getElementById('recentAttendance').innerHTML = recA;
+/* ==================================================
+   LOCAL STORAGE BASE STRUCTURE
+================================================== */
+if (!localStorage.getItem("konarakEmployees")) {
+    localStorage.setItem("konarakEmployees", JSON.stringify([]));
 }
 
-/* ---------- Employees CRUD ---------- */
-document.getElementById('newEmployeeBtn').addEventListener('click', ()=> {
-  openEmployeeModal();
-});
-
-function renderEmployees(){
-  state = loadState();
-  const tbody = document.getElementById('employeeTable');
-  tbody.innerHTML = '';
-  state.employees.forEach((e, idx)=>{
-    const tr = document.createElement('tr');
-    tr.className = 'table-friendly';
-    tr.innerHTML = `<td>${idx+1}</td>
-      <td>${e.firstName} ${e.lastName||''}</td>
-      <td>${e.code}</td>
-      <td>${e.designation||''}</td>
-      <td>${e.phone||''}</td>
-      <td>
-        <button data-id="${e.id}" class="editEmp btn bg-white/6">Edit</button>
-        <button data-id="${e.id}" class="qrEmp btn bg-white/6">QR</button>
-        <button data-id="${e.id}" class="deleteEmp btn bg-red-600">Delete</button>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-  // attach events
-  document.querySelectorAll('.editEmp').forEach(b=>b.addEventListener('click', e=>{
-    openEmployeeModal(b.dataset.id);
-  }));
-  document.querySelectorAll('.deleteEmp').forEach(b=>b.addEventListener('click', e=>{
-    if(!confirm('Delete employee?')) return;
-    state.employees = state.employees.filter(x=>x.id!==b.dataset.id);
-    saveState(state); renderEmployees(); renderDashboard(); renderDocEmployees(); renderPayrollSelection(); renderIdCardSelection();
-  }));
-  document.querySelectorAll('.qrEmp').forEach(b=>b.addEventListener('click', e=>{
-    const emp = state.employees.find(x=>x.id===b.dataset.id);
-    if(!emp) return alert('Employee not found');
-    showQrModal(emp);
-  }));
+function loadEmployees() {
+    return JSON.parse(localStorage.getItem("konarakEmployees"));
 }
 
-/* Employee modal (simple prompt-based for this demo) */
-function openEmployeeModal(id=null){
-  let emp = { id: uid('emp'), code: 'EMP'+Math.floor(Math.random()*9000+1000), firstName:'', lastName:'', designation:'', phone:'', salaryBasic:0, salaryComponents:{} };
-  if(id){
-    emp = state.employees.find(x=>x.id===id);
-    if(!emp) return alert('Not found');
-  }
-  // build a simple form dialog
-  const wrapper = document.createElement('div');
-  wrapper.className = 'fixed inset-0 z-50 flex items-center justify-center';
-  wrapper.innerHTML = `<div class="bg-white/6 p-6 card rounded-xl w-11/12 md:w-2/3">
-    <h3 class="text-lg font-semibold mb-2">${id? 'Edit Employee':'New Employee'}</h3>
-    <div class="grid md:grid-cols-2 gap-3">
-      <input id="tmpFirst" placeholder="First name" class="p-2 rounded-md" value="${emp.firstName||''}">
-      <input id="tmpLast" placeholder="Last name" class="p-2 rounded-md" value="${emp.lastName||''}">
-      <input id="tmpCode" placeholder="Code" class="p-2 rounded-md" value="${emp.code||''}">
-      <input id="tmpPhone" placeholder="Phone" class="p-2 rounded-md" value="${emp.phone||''}">
-      <input id="tmpDes" placeholder="Designation" class="p-2 rounded-md" value="${emp.designation||''}">
-      <input id="tmpBasic" type="number" placeholder="Basic salary" class="p-2 rounded-md" value="${emp.salaryBasic||0}">
-      <label class="col-span-2 text-sm text-gray-300">Upload Photo</label>
-      <input id="tmpPhoto" type="file" class="col-span-2 p-2 rounded-md">
-    </div>
-    <div class="mt-4 flex justify-end gap-2">
-      <button id="cancelBtn" class="btn bg-gray-600 card">Cancel</button>
-      <button id="saveBtn" class="btn bg-indigo-600 card">${id? 'Save':'Create'}</button>
-    </div>
-  </div>`;
-  document.body.appendChild(wrapper);
+function saveEmployees(data) {
+    localStorage.setItem("konarakEmployees", JSON.stringify(data));
+}
 
-  document.getElementById('cancelBtn').addEventListener('click', ()=> wrapper.remove());
-  document.getElementById('saveBtn').addEventListener('click', async ()=>{
-    const first = document.getElementById('tmpFirst').value.trim();
-    const last = document.getElementById('tmpLast').value.trim();
-    const code = document.getElementById('tmpCode').value.trim();
-    const phone = document.getElementById('tmpPhone').value.trim();
-    const des = document.getElementById('tmpDes').value.trim();
-    const basic = Number(document.getElementById('tmpBasic').value||0);
-    // photo
-    let photoData = emp.photo || null;
-    const photoFile = document.getElementById('tmpPhoto').files[0];
-    if(photoFile){
-      photoData = await fileToBase64(photoFile);
+
+/* ==================================================
+   ADD EMPLOYEE
+================================================== */
+function addEmployee() {
+    let name = document.getElementById("empName").value.trim();
+    let code = document.getElementById("empCode").value.trim();
+    let phone = document.getElementById("empPhone").value.trim();
+    let desig = document.getElementById("empDesignation").value.trim();
+    let salary = document.getElementById("empSalary").value.trim();
+
+    if (!name || !code) {
+        alert("Name & Code are mandatory!");
+        return;
     }
 
-    const newEmp = {...emp, firstName:first, lastName:last, code, phone, designation:des, salaryBasic:basic, photo:photoData};
-    // create or update
-    if(state.employees.some(x=>x.id===newEmp.id)){
-      state.employees = state.employees.map(x=> x.id===newEmp.id ? newEmp : x);
-    } else {
-      state.employees.push(newEmp);
-    }
-    saveState(state);
-    wrapper.remove();
-    renderEmployees();
-    renderDashboard();
-    renderDocEmployees();
-    renderPayrollSelection();
-    renderIdCardSelection();
-  });
-}
+    let employees = loadEmployees();
 
-/* convert file to base64 */
-function fileToBase64(file){
-  return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload = ()=> res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
-/* show QR modal */
-function showQrModal(emp){
-  const wrapper = document.createElement('div');
-  wrapper.className = 'fixed inset-0 z-50 flex items-center justify-center';
-  wrapper.innerHTML = `<div class="bg-white/6 p-6 card rounded-xl w-96">
-    <h3 class="text-lg font-semibold mb-2">QR for ${emp.firstName} ${emp.lastName||''}</h3>
-    <div id="qrbox" class="flex justify-center"></div>
-    <div class="mt-3 text-sm">Token: <span class="text-xs text-gray-300">${emp.id}</span></div>
-    <div class="mt-4 flex justify-end gap-2">
-      <button id="closeQr" class="btn bg-gray-600 card">Close</button>
-      <button id="printQr" class="btn bg-indigo-600 card">Print / Download</button>
-    </div>
-  </div>`;
-  document.body.appendChild(wrapper);
-  const qrb = wrapper.querySelector('#qrbox');
-  qrb.innerHTML = '';
-  new QRCode(qrb, { text: emp.id, width:200, height:200 });
-  wrapper.querySelector('#closeQr').addEventListener('click', ()=> wrapper.remove());
-  wrapper.querySelector('#printQr').addEventListener('click', async ()=>{
-    // render as canvas and PDF
-    const el = qrb;
-    const canvas = await html2canvas(el);
-    const img = canvas.toDataURL('image/png');
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation:'portrait' });
-    pdf.addImage(img, 'PNG', 40, 40, 120, 120);
-    pdf.save(`QR_${emp.code || emp.id}.pdf`);
-  });
-}
-
-/* ---------- Documents ---------- */
-function renderDocEmployees(){
-  state = loadState();
-  const sel = document.getElementById('docEmployee');
-  const sel2 = document.getElementById('idEmployee');
-  const sel3 = document.getElementById('payEmployee');
-  const sel4 = document.getElementById('leaveEmployee');
-  [sel, sel2, sel3, sel4].forEach(s=>{ if(!s) return; s.innerHTML = '<option value="">-- Select --</option>' + state.employees.map(e=>`<option value="${e.id}">${e.firstName} ${e.lastName||''} (${e.code})</option>`).join(''); });
-  // docs list
-  const docs = state.documents || [];
-  const dl = document.getElementById('docsList');
-  dl.innerHTML = docs.map(d=> {
-    const emp = state.employees.find(x=>x.id===d.employeeId) || {firstName:'Unknown'};
-    return `<div class="py-1 border-b"><strong>${d.type}</strong> — ${emp.firstName} ${emp.lastName||''} <button data-id="${d.id}" class="btn bg-white/6 downloadDoc">Download</button></div>`;
-  }).join('') || '<div class="text-gray-400">No documents</div>';
-  // attach download handlers
-  document.querySelectorAll('.downloadDoc').forEach(b=> b.addEventListener('click', ()=>{
-    const doc = state.documents.find(x=>x.id===b.dataset.id);
-    const link = document.createElement('a');
-    link.href = doc.data;
-    link.download = `${doc.type}_${doc.employeeId}.bin`;
-    link.click();
-  }));
-}
-
-document.getElementById('uploadDocBtn').addEventListener('click', async ()=>{
-  const empId = document.getElementById('docEmployee').value;
-  const type = document.getElementById('docType').value.trim();
-  const f = document.getElementById('docFile').files[0];
-  if(!empId || !type || !f) return alert('Select employee, type and file');
-  const data = await fileToBase64(f);
-  state.documents = state.documents || [];
-  state.documents.push({ id: uid('doc'), employeeId: empId, type, data, time: nowISO() });
-  saveState(state);
-  alert('Uploaded');
-  renderDocEmployees();
-});
-
-/* ---------- Attendance: QR scanning ---------- */
-let videoStream = null;
-const videoEl = document.getElementById('video');
-
-document.getElementById('startCamera').addEventListener('click', async ()=>{
-  if(videoStream) return;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
-    videoStream = stream;
-    videoEl.srcObject = stream;
-    videoEl.play();
-    startQrScanner();
-  } catch(e){ alert('Camera access denied or unavailable'); }
-});
-document.getElementById('stopCamera').addEventListener('click', ()=> {
-  if(videoStream){ videoStream.getTracks().forEach(t=>t.stop()); videoStream=null; videoEl.srcObject=null; stopQrScanner(); }
-});
-
-let scanning = false;
-let scanInterval = null;
-
-function startQrScanner(){
-  scanning = true;
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  scanInterval = setInterval(()=>{
-    if(videoEl.readyState !== videoEl.HAVE_ENOUGH_DATA) return;
-    canvas.width = videoEl.videoWidth;
-    canvas.height = videoEl.videoHeight;
-    ctx.drawImage(videoEl, 0,0, canvas.width, canvas.height);
-    const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
-    const code = jsQR(imgData.data, imgData.width, imgData.height);
-    if(code){
-      handleScannedToken(code.data);
-    }
-  }, 500);
-}
-
-function stopQrScanner(){ scanning = false; clearInterval(scanInterval); scanInterval=null; }
-
-document.getElementById('manualScanBtn').addEventListener('click', ()=> {
-  const token = prompt('Enter employee token (or employee id):');
-  if(token) handleScannedToken(token.trim());
-});
-
-function handleScannedToken(token){
-  // find employee by id
-  const emp = state.employees.find(e=> e.id === token || e.code === token);
-  if(!emp){ document.getElementById('scanResult').innerText = 'Unknown token: ' + token; return; }
-  // determine IN/OUT
-  const logs = state.attendance || [];
-  const last = logs.filter(l=>l.employeeId===emp.id).slice(-1)[0];
-  let type = 'IN';
-  if(last && last.type === 'IN') type = 'OUT';
-  const record = { id: uid('att'), employeeId: emp.id, type, time: nowISO(), source:'qr' };
-  state.attendance = state.attendance || [];
-  state.attendance.push(record);
-  saveState(state);
-  document.getElementById('scanResult').innerHTML = `<div class="text-green-300">Recorded ${type} for ${emp.firstName} ${emp.lastName||''} at ${formatDate(record.time)}</div>`;
-  renderAttendance();
-  renderDashboard();
-}
-
-/* render attendance log */
-function renderAttendance(){
-  state = loadState();
-  const at = document.getElementById('attendanceTable');
-  at.innerHTML = '';
-  state.attendance.slice().reverse().forEach(r=>{
-    const emp = state.employees.find(e=>e.id===r.employeeId) || {firstName:'Unknown', lastName:''};
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${formatDate(r.time)}</td><td>${emp.firstName} ${emp.lastName||''}</td><td>${r.type}</td>`;
-    at.appendChild(tr);
-  });
-}
-
-/* ---------- Leaves ---------- */
-document.getElementById('applyLeaveBtn').addEventListener('click', ()=>{
-  const empId = document.getElementById('leaveEmployee').value;
-  const type = document.getElementById('leaveType').value;
-  const from = document.getElementById('leaveFrom').value;
-  const to = document.getElementById('leaveTo').value;
-  if(!empId || !from || !to) return alert('Fill fields');
-  const record = { id: uid('leave'), employeeId: empId, type, from, to, status:'pending', appliedAt:nowISO() };
-  state.leaves = state.leaves || [];
-  state.leaves.push(record);
-  saveState(state); renderLeaves(); renderDashboard();
-});
-
-function renderLeaves(){
-  state = loadState();
-  const list = document.getElementById('leaveList');
-  list.innerHTML = state.leaves.map(l=>{
-    const emp = state.employees.find(e=>e.id===l.employeeId) || {firstName:'Unknown'};
-    return `<div class="py-1 border-b"><strong>${emp.firstName}</strong> — ${l.type} ${l.from} to ${l.to} <span class="text-xs text-gray-300">[${l.status}]</span>
-      ${l.status==='pending'? `<button data-id="${l.id}" class="btn bg-green-600 approveLeave">Approve</button> <button data-id="${l.id}" class="btn bg-red-600 rejectLeave">Reject</button>` : ''}
-    </div>`;
-  }).join('') || '<div class="text-gray-400">No leave requests</div>';
-  document.querySelectorAll('.approveLeave').forEach(b=> b.addEventListener('click', ()=> { updateLeave(b.dataset.id,'approved'); }));
-  document.querySelectorAll('.rejectLeave').forEach(b=> b.addEventListener('click', ()=> { updateLeave(b.dataset.id,'rejected'); }));
-}
-function updateLeave(id,status){
-  state.leaves = state.leaves.map(l=> l.id===id ? {...l, status, decidedAt:nowISO()} : l );
-  saveState(state); renderLeaves(); renderDashboard();
-}
-
-/* ---------- Payroll ---------- */
-document.getElementById('generatePayrollBtn').addEventListener('click', ()=>{
-  const empId = document.getElementById('payEmployee').value;
-  const month = document.getElementById('payMonth').value;
-  const ot = Number(document.getElementById('otHours').value||0);
-  const otherDed = Number(document.getElementById('otherDed').value||0);
-  if(!empId || !month) return alert('Select employee & month');
-  const emp = state.employees.find(e=>e.id===empId);
-  if(!emp) return alert('Employee not found');
-  const basic = Number(emp.salaryBasic || 0);
-  const hra = Math.round(basic * 0.2);
-  const conv = Math.round(basic * 0.05);
-  const overtime = Math.round((basic/8) * ot); // simple
-  const gross = basic + hra + conv + overtime;
-  const pf = Math.round(basic * 0.12);
-  const totalDed = pf + otherDed;
-  const net = gross - totalDed;
-  const payslip = { id: uid('pay'), employeeId: empId, month, basic, hra, conv, overtime, gross, pf, otherDed, totalDed, net, generatedAt: nowISO(), pdf: null };
-  state.payroll = state.payroll || [];
-  state.payroll.push(payslip);
-  saveState(state);
-  renderPayrollLists();
-  // generate payslip PDF
-  generatePayslipPdf(payslip, emp);
-});
-
-function renderPayrollLists(){
-  state = loadState();
-  const el = document.getElementById('payrollList');
-  el.innerHTML = state.payroll.slice().reverse().map(p=>{
-    const emp = state.employees.find(e=>e.id===p.employeeId) || {firstName:'Unknown'};
-    return `<div class="py-1 border-b"><strong>${emp.firstName}</strong> — ${p.month} — Net: ₹${toCurrency(p.net)} <button data-id="${p.id}" class="btn bg-white/6 downloadPayslip">Download</button></div>`;
-  }).join('') || '<div class="text-gray-400">No payroll records</div>';
-  document.querySelectorAll('.downloadPayslip').forEach(b=> b.addEventListener('click', ()=>{
-    const p = state.payroll.find(x=>x.id===b.dataset.id);
-    const emp = state.employees.find(e=>e.id===p.employeeId);
-    generatePayslipPdf(p, emp, true);
-  }));
-}
-
-async function generatePayslipPdf(p, emp, downloadImmediately=false){
-  // create a simple DOM node and render
-  const node = document.createElement('div');
-  node.style.width='800px';
-  node.style.padding='20px';
-  node.style.background='white';
-  node.innerHTML = `
-    <h2 style="font-family:Arial">Payslip — ${p.month}</h2>
-    <div><strong>${emp.firstName} ${emp.lastName||''} (${emp.code})</strong></div>
-    <table style="width:100%; margin-top:10px; font-family:Arial;">
-      <tr><td>Basic</td><td>₹${toCurrency(p.basic)}</td></tr>
-      <tr><td>HRA</td><td>₹${toCurrency(p.hra)}</td></tr>
-      <tr><td>Conveyance</td><td>₹${toCurrency(p.conv)}</td></tr>
-      <tr><td>Overtime</td><td>₹${toCurrency(p.overtime)}</td></tr>
-      <tr><td><strong>Gross</strong></td><td><strong>₹${toCurrency(p.gross)}</strong></td></tr>
-      <tr><td>PF</td><td>₹${toCurrency(p.pf)}</td></tr>
-      <tr><td>Other Deductions</td><td>₹${toCurrency(p.otherDed)}</td></tr>
-      <tr><td><strong>Net Pay</strong></td><td><strong>₹${toCurrency(p.net)}</strong></td></tr>
-    </table>
-  `;
-  document.body.appendChild(node);
-  const canvas = await html2canvas(node);
-  document.body.removeChild(node);
-  const img = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({orientation:'portrait'});
-  const w = pdf.internal.pageSize.getWidth();
-  pdf.addImage(img, 'PNG', 10,10, w-20, 0);
-  const filename = `Payslip_${emp.code}_${p.month}.pdf`;
-  if(downloadImmediately) pdf.save(filename);
-  // store pdf as base64 in payroll record (optional)
-  p.pdf = pdf.output('datauristring');
-  // update
-  state.payroll = state.payroll.map(x=> x.id===p.id ? p : x);
-  saveState(state);
-}
-
-/* ---------- ID Cards & QR ---------- */
-function renderIdCardSelection(){
-  state = loadState();
-  const sel = document.getElementById('idEmployee');
-  sel.innerHTML = '<option value="">-- select --</option>' + state.employees.map(e=>`<option value="${e.id}">${e.firstName} ${e.lastName||''} (${e.code})</option>`).join('');
-  document.getElementById('idEmployee').addEventListener('change', ()=>{
-    const id = document.getElementById('idEmployee').value;
-    const emp = state.employees.find(x=>x.id===id);
-    renderIdPreview(emp);
-  });
-  // buttons
-  document.getElementById('downloadIdPdf').addEventListener('click', ()=> {
-    const id = document.getElementById('idEmployee').value;
-    if(!id) return alert('Select employee');
-    const emp = state.employees.find(x=>x.id===id);
-    downloadIdPdf(emp);
-  });
-  document.getElementById('downloadQrPng').addEventListener('click', ()=> {
-    const id = document.getElementById('idEmployee').value;
-    if(!id) return alert('Select employee');
-    const emp = state.employees.find(x=>x.id===id);
-    const box = document.getElementById('qrcodePreview').querySelector('div');
-    if(!box) return alert('No QR');
-    // create canvas
-    html2canvas(box).then(canvas=>{
-      const a = document.createElement('a');
-      a.href = canvas.toDataURL('image/png');
-      a.download = `QR_${emp.code}.png`;
-      a.click();
+    employees.push({
+        name, code, phone, desig, salary
     });
-  });
+
+    saveEmployees(employees);
+    renderEmployees();
+
+    document.querySelectorAll("input").forEach(i => i.value = "");
 }
 
-/* render ID preview area */
-function renderIdPreview(emp){
-  const area = document.getElementById('idPreviewArea');
-  const qrBox = document.getElementById('qrcodePreview');
-  qrBox.innerHTML = '';
-  if(!emp){
-    area.innerHTML = '<div class="text-gray-400">Select an employee to see preview</div>';
-    return;
-  }
-  // build preview HTML (inline styles to ensure PDF render looks good)
-  const photo = emp.photo ? `<img src="${emp.photo}" style="width:96px;height:96px;border-radius:8px;object-fit:cover">` : `<div style="width:96px;height:96px;background:#ddd;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#666">No photo</div>`;
-  const html = `<div style="display:flex;gap:12px;align-items:center;background:#fff;padding:16px;border-radius:10px;">
-    ${photo}
-    <div>
-      <div style="font-weight:700;font-size:16px;">${emp.firstName} ${emp.lastName||''}</div>
-      <div style="font-size:13px;color:#555">Code: ${emp.code}</div>
-      <div style="font-size:13px;color:#555">Designation: ${emp.designation||''}</div>
-      <div style="margin-top:8px"><img id="inlineQR" /></div>
-    </div>
-  </div>`;
-  area.innerHTML = html;
-  const qrb = document.createElement('div');
-  qrb.style.width='150px'; qrb.style.height='150px';
-  document.getElementById('qrcodePreview').appendChild(qrb);
-  new QRCode(qrb, { text: emp.id, width:150, height:150 });
-  // also draw same QR inside the preview's img tag
-  const qrCanvasImg = qrb.querySelector('img') || qrb.querySelector('canvas');
-  const inQR = document.getElementById('inlineQR');
-  if(qrCanvasImg) inQR.src = qrCanvasImg.src || qrCanvasImg.toDataURL();
+
+/* ==================================================
+   RENDER EMPLOYEE TABLE
+================================================== */
+function renderEmployees() {
+    let employees = loadEmployees();
+    let body = document.getElementById("employeeBody");
+    body.innerHTML = "";
+
+    employees.forEach(emp => {
+        body.innerHTML += `
+            <tr>
+                <td>${emp.name}</td>
+                <td>${emp.code}</td>
+                <td>${emp.phone}</td>
+                <td>${emp.desig}</td>
+                <td>${emp.salary}</td>
+            </tr>
+        `;
+    });
 }
 
-/* download ID pdf */
-async function downloadIdPdf(emp){
-  if(!emp) return;
-  const preview = document.getElementById('idPreviewArea').firstElementChild;
-  // ensure background white for PDF contrast
-  const temp = preview.cloneNode(true);
-  temp.style.background = 'white';
-  document.body.appendChild(temp);
-  const canvas = await html2canvas(temp);
-  document.body.removeChild(temp);
-  const img = canvas.toDataURL('image/png');
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({orientation:'landscape', unit:'px', format:[canvas.width+20, canvas.height+20]});
-  pdf.addImage(img, 'PNG', 10,10);
-  pdf.save(`ID_${emp.code}.pdf`);
-}
-
-/* ---------- Exports: Excel / PDF ---------- */
-function exportEmployeesExcel(){
-  state = loadState();
-  const data = state.employees.map(e=>({
-    Code: e.code, Name: e.firstName + ' ' + (e.lastName||''), Designation: e.designation, Phone: e.phone, Basic: e.salaryBasic
-  }));
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Employees');
-  XLSX.writeFile(wb, 'Employees.xlsx');
-}
-function exportDashboardPdf(){
-  const node = document.querySelector('#dashboard');
-  html2canvas(node).then(canvas=>{
-    const img = canvas.toDataURL('image/png');
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF();
-    const w = pdf.internal.pageSize.getWidth();
-    pdf.addImage(img, 'PNG', 5,5, w-10, 0);
-    pdf.save('Dashboard.pdf');
-  });
-}
-function exportAllExcel(){
-  state = loadState();
-  const emp = state.employees.map(e=>({Code:e.code,Name:e.firstName+' '+(e.lastName||''),Designation:e.designation,Phone:e.phone}));
-  const att = state.attendance.map(a=>({Time:formatDate(a.time),Employee:a.employeeId,Type:a.type}));
-  const leaves = state.leaves.map(l=>({Employee:l.employeeId,From:l.from,To:l.to,Status:l.status}));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(emp), 'Employees');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(att), 'Attendance');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leaves), 'Leaves');
-  XLSX.writeFile(wb, 'Konarak_HRMS_Export.xlsx');
-}
-
-/* ---------- Utility buttons ---------- */
-document.getElementById('exportAllExcel').addEventListener('click', exportAllExcel);
-document.getElementById('exportAllPdf').addEventListener('click', exportDashboardPdf);
-document.getElementById('downloadEmployeesExcel').addEventListener('click', exportEmployeesExcel);
-document.getElementById('downloadEmployeesPdf').addEventListener('click', ()=>{
-  const node = document.querySelector('#employees .card');
-  html2canvas(node).then(canvas=>{
-    const img = canvas.toDataURL('image/png');
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF();
-    const w = pdf.internal.pageSize.getWidth();
-    pdf.addImage(img, 'PNG', 5,5, w-10, 0);
-    pdf.save('Employees.pdf');
-  });
-});
-document.getElementById('clearAll').addEventListener('click', ()=>{
-  if(!confirm('Clear ALL application data from localStorage?')) return;
-  localStorage.removeItem(LS_KEY);
-  state = loadState();
-  renderEmployees(); renderDashboard(); renderAttendance(); renderDocEmployees(); renderLeaves(); renderPayrollLists(); renderIdCardSelection();
-});
-
-/* ---------- Initial render hooks ---------- */
 renderEmployees();
-renderDashboard();
-renderDocEmployees();
-renderLeaves();
-renderPayrollLists();
-renderIdCardSelection();
 
-/* ---------- Helper: payroll selection re-render ---------- */
-function renderPayrollSelection(){
-  const sel = document.getElementById('payEmployee');
-  sel.innerHTML = '<option value="">-- Select --</option>' + state.employees.map(e=>`<option value="${e.id}">${e.firstName} ${e.lastName||''} (${e.code})</option>`).join('');
-  const sel2 = document.getElementById('leaveEmployee');
-  if(sel2) sel2.innerHTML = '<option value="">-- Select --</option>' + state.employees.map(e=>`<option value="${e.id}">${e.firstName} ${e.lastName||''} (${e.code})</option>`).join('');
+
+/* ==================================================
+   EXPORT EMPLOYEES → EXCEL
+================================================== */
+function exportEmployeesExcel() {
+    let employees = loadEmployees();
+    let sheet = XLSX.utils.json_to_sheet(employees);
+    let book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Employees");
+    XLSX.writeFile(book, "Employees.xlsx");
 }
-renderPayrollSelection();
 
+
+/* ==================================================
+   EXPORT EMPLOYEES → PDF
+================================================== */
+async function exportEmployeesPDF() {
+    const table = document.getElementById("empTable");
+
+    const canvas = await html2canvas(table);
+    const img = canvas.toDataURL("image/png");
+
+    const { jsPDF } = window.jspdf;
+    let pdf = new jsPDF('p', 'mm', 'a4');
+
+    let width = pdf.internal.pageSize.getWidth() - 20;
+    pdf.addImage(img, 'PNG', 10, 10, width, 0);
+
+    pdf.save("Employees.pdf");
+}
+
+
+/* ==================================================
+   CLEAR ALL EMPLOYEES
+================================================== */
+function clearEmployees() {
+    if (confirm("Are you sure you want to delete all employees?")) {
+        saveEmployees([]);
+        renderEmployees();
+    }
+}
 </script>
 
 </body>
