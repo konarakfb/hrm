@@ -369,12 +369,99 @@
 
 
       <!-- Recruitment placeholder -->
-      <div id="recruitmentView" style="display:none;">
-        <div class="section">
-          <div class="section-title">Recruitment</div>
-          <div class="mini muted">Recruitment module coming next (Part 3)</div>
+     <!-- ========== RECRUITMENT MODULE (PART 3) ========== -->
+<div id="recruitmentView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Recruitment</div>
+        <div class="mini muted">Candidates, stages, offers & hire (Offer → Accept → Hire)</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn primary" onclick="cand_openForm()">+ New Candidate</button>
+        <button class="btn ghost" onclick="cand_exportExcel()">Export Candidates</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+      <input id="candSearch" class="field small" placeholder="Search candidate name, email, phone, position..." oninput="cand_renderList()" />
+      <select id="candFilterStage" class="field small" onchange="cand_renderList()">
+        <option value="">All Stages</option>
+        <option value="New">New</option>
+        <option value="Screening">Screening</option>
+        <option value="Interview">Interview</option>
+        <option value="Selected">Selected</option>
+        <option value="Offer Generated">Offer Generated</option>
+        <option value="Offer Accepted">Offer Accepted</option>
+        <option value="Hired">Hired</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+      <select id="candFilterSource" class="field small" onchange="cand_renderList()">
+        <option value="">All Sources</option>
+        <option>LinkedIn</option><option>Referral</option><option>Website</option><option>Walk-in</option>
+      </select>
+      <div style="margin-left:auto" class="mini muted">Total candidates: <strong id="candTotal">0</strong></div>
+    </div>
+
+    <!-- Add / Edit Candidate Form -->
+    <div id="candFormWrap" class="section" style="margin-top:12px; display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:800" id="candFormTitle">New Candidate</div>
+        <div class="mini muted">Resume upload, expected salary, position</div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <div class="row">
+          <div class="col"><input id="c_name" class="field" placeholder="Full name *"></div>
+          <div style="width:220px"><input id="c_phone" class="field" placeholder="Phone"></div>
+        </div>
+
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="c_email" class="field" placeholder="Email *"></div>
+          <div class="col"><input id="c_position" class="field" placeholder="Position applied"></div>
+        </div>
+
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="c_source" class="field" placeholder="Source (LinkedIn / Referral / Website)"></div>
+          <div class="col"><input id="c_expected_salary" type="number" class="field" placeholder="Expected salary (annual)"></div>
+        </div>
+
+        <div style="margin-top:8px;">
+          <label class="mini muted">Resume (PDF preferred)</label>
+          <input id="c_resume" type="file" accept=".pdf,.doc,.docx" class="field small" />
+        </div>
+
+        <div style="margin-top:8px;">
+          <textarea id="c_notes" class="field" rows="3" placeholder="Notes / interview feedback"></textarea>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn primary" id="candSaveBtn" onclick="cand_save()">Save Candidate</button>
+          <button class="btn ghost" onclick="cand_cancel()">Cancel</button>
         </div>
       </div>
+    </div>
+
+    <!-- Candidate List -->
+    <div id="candListWrap" class="section" style="margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:800">Candidates</div>
+        <div class="mini muted">Actions: View • Progress Stage • Generate Offer • Mark Accepted • Hire</div>
+      </div>
+
+      <div style="margin-top:8px; overflow:auto; max-height:440px;">
+        <table id="candTable">
+          <thead><tr><th>Name</th><th>Position</th><th>Phone</th><th>Expected (₹/yr)</th><th>Stage</th><th>Actions</th></tr></thead>
+          <tbody id="candTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- ========== END RECRUITMENT MODULE ========== -->
+
 
       <!-- Attendance placeholder -->
       <div id="attendanceView" style="display:none;">
@@ -1266,6 +1353,540 @@ window.emp_generateLoginCredentials = emp_generateLoginCredentials;
 
 /* ===========================
    End PART 2 code block
+   =========================== */
+/* ===========================
+   PART 3: Recruitment Module (Offer-first workflow, Option C)
+   Paste this block BEFORE the "End of Part 1 core file" comment.
+   Depends on: STORE, saveStore(), uid(), fileToBase64(), escapeHtml(), logActivity(), emp_openForm(), emp_generateLoginCredentials(), isDuplicateCandidate()
+   =========================== */
+
+/* --- Candidate helper --- */
+function cand_find(id){ return (STORE.candidates||[]).find(c=>c.id===id); }
+
+/* --- open new candidate form --- */
+function cand_openForm(editId){
+  // admin only
+  if(SESSION.role !== 'admin') return alert('Admin access required');
+  document.getElementById('candFormWrap').style.display = 'block';
+  document.getElementById('candFormTitle').innerText = editId ? 'Edit Candidate' : 'New Candidate';
+  // clear fields
+  ['c_name','c_phone','c_email','c_position','c_source','c_expected_salary','c_resume','c_notes'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const saveBtn = document.getElementById('candSaveBtn');
+  if(editId) saveBtn.dataset.edit = editId; else saveBtn.removeAttribute('data-edit');
+}
+
+/* --- cancel candidate form --- */
+function cand_cancel(){ document.getElementById('candFormWrap').style.display='none'; const s=document.getElementById('candSaveBtn'); if(s) s.removeAttribute('data-edit'); }
+
+/* --- duplicate check for candidate creation --- */
+function cand_isDuplicate(candidate){
+  // duplicate if email or phone already in candidates or employees
+  const email = (candidate.email || '').toLowerCase();
+  const phone = (candidate.phone || '').toString().trim();
+  if(!email && !phone) return false;
+  const dup1 = (STORE.candidates||[]).find(c => (c.email && c.email.toLowerCase() === email) || (c.phone && c.phone === phone));
+  if(dup1) return true;
+  const dup2 = (STORE.employees||[]).find(e => (e.email && e.email.toLowerCase() === email) || (e.phone && e.phone === phone));
+  if(dup2) return true;
+  return false;
+}
+
+/* --- save candidate --- */
+async function cand_save(){
+  if(SESSION.role !== 'admin') return alert('Admin access required');
+  const saveBtn = document.getElementById('candSaveBtn');
+  const editId = saveBtn && saveBtn.dataset && saveBtn.dataset.edit ? saveBtn.dataset.edit : null;
+
+  const candidate = {
+    name: (document.getElementById('c_name').value || '').trim(),
+    phone: (document.getElementById('c_phone').value || '').trim(),
+    email: (document.getElementById('c_email').value || '').trim(),
+    position: (document.getElementById('c_position').value || '').trim(),
+    source: (document.getElementById('c_source').value || '').trim(),
+    expectedSalary: Number(document.getElementById('c_expected_salary').value || 0),
+    notes: (document.getElementById('c_notes').value || '').trim(),
+    resume: null,
+    stage: 'New',
+    createdAt: new Date().toISOString(),
+    offer: null,
+    hired: false
+  };
+
+  // basic validation
+  if(!candidate.name) return alert('Candidate name required');
+  if(!candidate.email || !/\S+@\S+\.\S+/.test(candidate.email)) return alert('Valid email required');
+
+  // resume file
+  const resumeInput = document.getElementById('c_resume');
+  if(resumeInput && resumeInput.files && resumeInput.files[0]){
+    candidate.resume = { name: resumeInput.files[0].name, data: await fileToBase64(resumeInput.files[0]) };
+  }
+
+  // duplicate prevention (exclude edit)
+  if(!editId && cand_isDuplicate(candidate)) return alert('Duplicate candidate or candidate already exists as employee (email/phone).');
+
+  if(editId){
+    // update
+    const idx = (STORE.candidates||[]).findIndex(x=>x.id===editId);
+    if(idx === -1) return alert('Candidate not found');
+    const prev = STORE.candidates[idx];
+    const merged = {...prev, ...candidate, updatedAt: new Date().toISOString()};
+    // keep existing resume if not replaced
+    if(!candidate.resume) merged.resume = prev.resume || null;
+    // stage and offer preserved unless changed through actions
+    merged.stage = prev.stage || merged.stage;
+    STORE.candidates[idx] = merged;
+    saveStore();
+    cand_cancel();
+    cand_renderList();
+    logActivity(`Candidate updated: ${merged.name}`);
+    cand_showToast('Candidate updated');
+  } else {
+    // create new candidate
+    const id = uid('cand');
+    candidate.id = id;
+    candidate.createdAt = new Date().toISOString();
+    STORE.candidates = STORE.candidates || [];
+    STORE.candidates.push(candidate);
+    saveStore();
+    cand_cancel();
+    cand_renderList();
+    logActivity(`Candidate created: ${candidate.name}`);
+    cand_showToast('Candidate added');
+  }
+}
+
+/* --- transient toast --- */
+function cand_showToast(t){
+  const el = document.createElement('div');
+  el.style.position='fixed'; el.style.left='20px'; el.style.bottom='20px'; el.style.background='var(--accent-strong)'; el.style.color='#001'; el.style.padding='10px 14px'; el.style.borderRadius='8px'; el.style.zIndex=9999; el.innerText = t;
+  document.body.appendChild(el);
+  setTimeout(()=> el.remove(), 4500);
+}
+
+/* --- render candidate list --- */
+function cand_renderList(){
+  const body = document.getElementById('candTableBody');
+  if(!body) return;
+  body.innerHTML = '';
+  const q = (document.getElementById('candSearch').value || '').trim().toLowerCase();
+  const stageFilter = (document.getElementById('candFilterStage').value || '');
+  const srcFilter = (document.getElementById('candFilterSource').value || '');
+  let list = (STORE.candidates||[]).slice().reverse();
+  if(q) list = list.filter(c => (c.name||'').toLowerCase().includes(q) || (c.email||'').toLowerCase().includes(q) || (c.phone||'').toLowerCase().includes(q) || (c.position||'').toLowerCase().includes(q));
+  if(stageFilter) list = list.filter(c => c.stage === stageFilter);
+  if(srcFilter) list = list.filter(c => (c.source||'') === srcFilter);
+  list.forEach(c=>{
+    body.insertAdjacentHTML('beforeend', `<tr>
+      <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.position||'')}</td>
+      <td>${escapeHtml(c.phone||'')}</td>
+      <td>${c.expectedSalary ? '₹' + Number(c.expectedSalary).toLocaleString() : '-'}</td>
+      <td>${escapeHtml(c.stage||'New')}</td>
+      <td>
+        <button class="btn ghost" onclick="cand_view('${c.id}')">View</button>
+        ${c.stage !== 'Hired' && c.stage !== 'Rejected' ? `<button class="btn ghost" onclick="cand_nextStagePrompt('${c.id}')">Next</button>` : ''}
+        ${c.stage !== 'Offer Generated' ? `<button class="btn ghost" onclick="cand_generateOfferModal('${c.id}')">Offer</button>` : `<button class="btn ghost" onclick="cand_viewOffer('${c.id}')">View Offer</button>`}
+        ${c.stage === 'Offer Accepted' && !c.hired ? `<button class="btn primary" onclick="cand_hire('${c.id}')">Hire</button>` : ''}
+        ${c.stage !== 'Hired' ? `<button class="btn ghost" onclick="cand_reject('${c.id}')">Reject</button>` : ''}
+      </td>
+    </tr>`);
+  });
+  document.getElementById('candTotal').innerText = (STORE.candidates||[]).length;
+}
+
+/* --- view candidate modal --- */
+function cand_view(id){
+  const c = cand_find(id);
+  if(!c) return alert('Candidate not found');
+  const modal = document.createElement('div'); modal.className = 'modal-backdrop';
+  const resumeHtml = c.resume ? `<div style="margin-top:8px"><button class="btn ghost" onclick="cand_previewResume('${id}')">Preview Resume</button></div>` : '<div class="mini muted">No resume</div>';
+  modal.innerHTML = `<div class="modal" style="width:720px;max-width:96vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-weight:900">${escapeHtml(c.name)}</div>
+      <div><button class="btn ghost" id="candCloseBtn">Close</button></div>
+    </div>
+    <div style="margin-top:8px">
+      <div class="mini muted">Email: ${escapeHtml(c.email)} • Phone: ${escapeHtml(c.phone)} • Position: ${escapeHtml(c.position||'')}</div>
+      <div style="margin-top:8px">${escapeHtml(c.notes||'')}</div>
+      ${resumeHtml}
+      <div style="margin-top:10px" class="mini muted">Stage: ${escapeHtml(c.stage||'New')}</div>
+      ${c.offer ? `<div style="margin-top:8px"><strong>Offer:</strong> ${escapeHtml(c.offer.status||'')} • Gross CTC: ₹${Number(c.offer.grossAnnual||0).toLocaleString()}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn ghost" onclick="cand_edit('${id}')">Edit</button>
+        ${c.stage !== 'Hired' && c.stage !== 'Rejected' ? `<button class="btn ghost" onclick="cand_nextStagePrompt('${id}')">Next Stage</button>` : ''}
+        ${c.stage === 'Offer Generated' ? `<button class="btn primary" onclick="cand_sendOffer('${id}')">Mark Offer Sent</button>` : ''}
+        ${c.stage === 'Offer Generated' ? `<button class="btn ghost" onclick="cand_viewOffer('${id}')">View Offer</button>` : ''}
+        ${c.stage === 'Offer Accepted' && !c.hired ? `<button class="btn primary" onclick="cand_hire('${id}')">Hire</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('candCloseBtn').addEventListener('click', ()=> modal.remove());
+}
+
+/* --- preview resume in new window --- */
+function cand_previewResume(id){
+  const c = cand_find(id);
+  if(!c || !c.resume) return alert('No resume available');
+  const w = window.open('');
+  if(c.resume.data.startsWith('data:application/pdf')) {
+    w.document.write(`<iframe src="${c.resume.data}" style="width:100%;height:100vh;border:none;"></iframe>`);
+  } else {
+    // display as link
+    const a = `<a href="${c.resume.data}" download="${escapeHtml(c.resume.name)}">Download Resume</a>`;
+    w.document.write(a);
+  }
+}
+
+/* --- next stage prompt & action --- */
+function cand_nextStagePrompt(id){
+  const c = cand_find(id);
+  if(!c) return;
+  const stages = ['New','Screening','Interview','Selected','Offer Generated','Offer Accepted','Hired','Rejected'];
+  const nextIndex = Math.min(stages.indexOf(c.stage || 'New') + 1, stages.length - 1);
+  if(nextIndex < 0) return;
+  const nextStage = stages[nextIndex];
+  if(!confirm(`Move candidate ${c.name} to stage: ${nextStage}?`)) return;
+  c.stage = nextStage;
+  saveStore();
+  cand_renderList();
+  logActivity(`Candidate ${c.name} moved to ${nextStage}`);
+  cand_showToast(`Moved to ${nextStage}`);
+}
+
+/* --- reject candidate --- */
+function cand_reject(id){
+  if(!confirm('Reject candidate?')) return;
+  const c = cand_find(id);
+  if(!c) return;
+  c.stage = 'Rejected';
+  saveStore();
+  cand_renderList();
+  logActivity(`Candidate rejected: ${c.name}`);
+}
+
+/* --- generate offer modal (collect offer params) --- */
+function cand_generateOfferModal(id){
+  const c = cand_find(id);
+  if(!c) return;
+  const modal = document.createElement('div'); modal.className='modal-backdrop';
+  modal.innerHTML = `<div class="modal" style="width:760px;max-width:96vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Generate Offer — ${escapeHtml(c.name)}</div><div><button class="btn ghost" id="offerCloseBtn">Close</button></div></div>
+    <div style="margin-top:8px;">
+      <div class="mini muted">Fill salary breakup & terms (annual amounts)</div>
+      <div style="margin-top:8px" class="row">
+        <div class="col"><input id="offer_basic" class="field small" placeholder="Basic (annual)"></div>
+        <div class="col"><input id="offer_hra" class="field small" placeholder="HRA (annual)"></div>
+      </div>
+      <div style="margin-top:8px" class="row">
+        <div class="col"><input id="offer_convey" class="field small" placeholder="Conveyance (annual)"></div>
+        <div class="col"><input id="offer_special" class="field small" placeholder="Special allowance (annual)"></div>
+      </div>
+      <div style="margin-top:8px" class="row">
+        <div class="col"><input id="offer_bonus" class="field small" placeholder="Variable / Bonus (annual)"></div>
+        <div class="col"><input id="offer_employer_pf" class="field small" placeholder="Employer PF contribution (annual)"></div>
+      </div>
+      <div style="margin-top:8px" class="row">
+        <div class="col"><input id="offer_probation" class="field small" placeholder="Probation period (months)"></div>
+        <div class="col"><input id="offer_notice" class="field small" placeholder="Notice period (months)"></div>
+      </div>
+      <div style="margin-top:8px"><input id="offer_joining" type="date" class="field small" placeholder="Proposed joining date"></div>
+      <div style="margin-top:8px"><textarea id="offer_notes" class="field small" rows="3" placeholder="Additional clauses (e.g., confidentiality, leaves summary)"></textarea></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn primary" onclick="cand_generateOffer('${id}')">Generate Offer PDF & Save</button>
+        <button class="btn ghost" id="offerCancel">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('offerCloseBtn').addEventListener('click', ()=> modal.remove());
+  document.getElementById('offerCancel').addEventListener('click', ()=> modal.remove());
+}
+
+/* --- actually generate offer (save to candidate + produce PDF) --- */
+async function cand_generateOffer(id){
+  const c = cand_find(id);
+  if(!c) return alert('Candidate not found');
+  // read inputs
+  const basicA = Number(document.getElementById('offer_basic').value || 0);
+  const hraA = Number(document.getElementById('offer_hra').value || 0);
+  const conveyA = Number(document.getElementById('offer_convey').value || 0);
+  const specialA = Number(document.getElementById('offer_special').value || 0);
+  const bonusA = Number(document.getElementById('offer_bonus').value || 0);
+  const employerPfA = Number(document.getElementById('offer_employer_pf').value || 0);
+  const probationMonths = Number(document.getElementById('offer_probation').value || 0);
+  const noticeMonths = Number(document.getElementById('offer_notice').value || 0);
+  const joiningDate = document.getElementById('offer_joining').value || '';
+  const notes = document.getElementById('offer_notes').value || '';
+
+  if(!basicA || !joiningDate) return alert('Basic annual and joining date required');
+
+  // calculations (annual)
+  const grossAnnual = basicA + hraA + conveyA + specialA + bonusA;
+  const monthlyGross = Math.round(grossAnnual / 12);
+  const employeePfDeductionMonthly = Math.round((basicA * 0.12) / 12); // employee PF deduction monthly
+  const employerPfMonthly = Math.round((employerPfA || (basicA * 0.12)) / 12); // use provided employer PF or default 12%
+  const esiApplicable = false; // can extend with toggle
+
+  // prepare offer object
+  const offer = {
+    id: uid('offer'),
+    generatedAt: new Date().toISOString(),
+    basicAnnual: basicA,
+    hraAnnual: hraA,
+    conveyAnnual: conveyA,
+    specialAnnual: specialA,
+    bonusAnnual: bonusA,
+    employerPfAnnual: employerPfA,
+    grossAnnual,
+    monthlyGross,
+    employeePfDeductionMonthly,
+    employerPfMonthly,
+    probationMonths,
+    noticeMonths,
+    joiningDate,
+    notes,
+    status: 'Offer Generated'
+  };
+
+  // attach to candidate record
+  c.offer = offer;
+  c.stage = 'Offer Generated';
+  saveStore();
+  cand_renderList();
+  logActivity(`Offer generated for ${c.name} (Gross ₹${grossAnnual})`);
+
+  // create a printable offer HTML node
+  const node = document.createElement('div');
+  node.style.width='800px'; node.style.padding='18px'; node.style.background='#fff'; node.style.color='#000';
+  node.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center;">
+      <img src="logo.png" style="width:90px;height:90px;object-fit:contain" onerror="this.style.display='none'">
+      <div>
+        <div style="font-weight:900;font-size:20px">Konarak Food & Beverages</div>
+        <div style="font-size:14px">Offer of Employment</div>
+      </div>
+    </div>
+    <hr style="margin:10px 0;border:none;border-top:1px solid #ddd">
+    <div style="margin-top:8px">
+      <div>Date: ${new Date().toLocaleDateString()}</div>
+      <div style="margin-top:12px">To, <strong>${escapeHtml(c.name)}</strong></div>
+      <div style="margin-top:6px">Subject: Offer of employment for the role of <strong>${escapeHtml(c.position || 'Employee')}</strong></div>
+      <div style="margin-top:12px">Dear ${escapeHtml(c.name)},</div>
+      <div style="margin-top:8px">We are pleased to offer you the position of <strong>${escapeHtml(c.position || '')}</strong> at Konarak Food & Beverages. Below are the terms:</div>
+      <div style="margin-top:10px">
+        <strong>Compensation (Annual)</strong>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px;">
+          <tr><td style="padding:6px;border:1px solid #eee">Basic (annual)</td><td style="padding:6px;border:1px solid #eee">₹${basicA.toLocaleString()}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #eee">HRA (annual)</td><td style="padding:6px;border:1px solid #eee">₹${hraA.toLocaleString()}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #eee">Conveyance (annual)</td><td style="padding:6px;border:1px solid #eee">₹${conveyA.toLocaleString()}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #eee">Special Allowance (annual)</td><td style="padding:6px;border:1px solid #eee">₹${specialA.toLocaleString()}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #eee">Variable / Bonus (annual)</td><td style="padding:6px;border:1px solid #eee">₹${bonusA.toLocaleString()}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #eee"><strong>Gross CTC (annual)</strong></td><td style="padding:6px;border:1px solid #eee"><strong>₹${grossAnnual.toLocaleString()}</strong></td></tr>
+        </table>
+      </div>
+      <div style="margin-top:10px">
+        <strong>Monthly Take-Home Estimate</strong>
+        <div class="mini">Estimated monthly gross: ₹${monthlyGross.toLocaleString()} • Employee PF (monthly): ₹${employeePfDeductionMonthly.toLocaleString()} • Employer PF (monthly): ₹${employerPfMonthly.toLocaleString()}</div>
+      </div>
+      <div style="margin-top:10px">
+        <strong>Employment Terms</strong>
+        <ul>
+          <li>Probation: ${probationMonths} month(s).</li>
+          <li>Notice period: ${noticeMonths} month(s) after confirmation.</li>
+          <li>Joining date: ${escapeHtml(offer.joiningDate)}</li>
+          <li>Leaves, confidentiality, and code of conduct apply as per company policy.</li>
+        </ul>
+      </div>
+      <div style="margin-top:10px">
+        ${escapeHtml(notes || 'You are requested to acknowledge this offer by signing and returning a copy.')}
+      </div>
+      <div style="margin-top:20px">Sincerely,<br><strong>Konarak Food & Beverages</strong><br>HR Team</div>
+      <div style="margin-top:20px;font-size:12px;color:#666">This offer is based on the information you have provided and is subject to verification of documents and references.</div>
+    </div>
+  `;
+
+  document.body.appendChild(node);
+  const canvas = await html2canvas(node, { scale: 2 });
+  const img = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const imgW = pageW - 40;
+  pdf.addImage(img, 'PNG', 20, 20, imgW, 0);
+  // attach offer PDF data URI to candidate.offer
+  offer.pdf = pdf.output('datauristring');
+  // mark offer saved
+  c.offer = offer;
+  c.stage = 'Offer Generated';
+  saveStore();
+  pdf.save(`Offer_${c.name.replace(/\s+/g,'_')}.pdf`);
+  document.body.removeChild(node);
+  cand_renderList();
+  cand_showToast('Offer generated and saved');
+}
+
+/* --- view saved offer for candidate --- */
+function cand_viewOffer(id){
+  const c = cand_find(id);
+  if(!c || !c.offer) return alert('No offer found');
+  // open pdf in new window
+  const w = window.open('');
+  if(c.offer.pdf) w.document.write(`<iframe src="${c.offer.pdf}" style="width:100%;height:100vh;border:none"></iframe>`);
+  else alert('Offer PDF not available');
+}
+
+/* --- mark offer sent or accepted manually --- */
+function cand_sendOffer(id){
+  const c = cand_find(id);
+  if(!c || !c.offer) return alert('Offer not found');
+  c.offer.status = 'Offer Sent';
+  c.stage = 'Offer Generated';
+  saveStore();
+  cand_renderList();
+  logActivity(`Offer sent to ${c.name}`);
+  if(confirm('Mark offer as ACCEPTED now? (Choose OK to mark accepted)')) {
+    c.offer.status = 'Offer Accepted';
+    c.stage = 'Offer Accepted';
+    saveStore();
+    cand_renderList();
+    logActivity(`Offer accepted by ${c.name}`);
+    cand_showToast('Offer marked accepted');
+  }
+}
+
+/* --- mark offer accepted (simulate candidate acceptance) --- */
+function cand_markAccepted(id){
+  const c = cand_find(id);
+  if(!c || !c.offer) return alert('Offer not found');
+  c.offer.status = 'Offer Accepted';
+  c.stage = 'Offer Accepted';
+  saveStore();
+  cand_renderList();
+  logActivity(`Offer accepted: ${c.name}`);
+}
+
+/* --- Hire candidate (only after offer accepted) --- */
+function cand_hire(id){
+  if(SESSION.role !== 'admin') return alert('Admin only');
+  const c = cand_find(id);
+  if(!c) return alert('Candidate not found');
+  if(c.stage !== 'Offer Accepted') return alert('Candidate must accept offer before hiring');
+  if(c.hired) return alert('Candidate already hired');
+  // duplicate protection again
+  if(cand_isDuplicate(c)) return alert('Candidate email/phone already exists in system (employee or candidate)');
+  // create employee record automatically
+  const now = new Date().toISOString();
+  const empId = uid('emp');
+  const code = 'EMP' + Math.floor(1000 + Math.random()*8999);
+  const password = emp_generatePassword();
+  const emp = {
+    id: empId,
+    fullname: c.name,
+    code,
+    email: c.email,
+    phone: c.phone,
+    department: c.position || '',
+    designation: c.position || '',
+    doj: c.offer && c.offer.joiningDate ? c.offer.joiningDate : now.slice(0,10),
+    dob: '',
+    type: 'Permanent',
+    manager: '',
+    basic: c.offer ? Math.round(c.offer.basicAnnual || 0 / 1) : Math.round((c.expectedSalary || 0)/12),
+    hra: c.offer ? Math.round(c.offer.hraAnnual || 0) : 0,
+    convey: c.offer ? Math.round(c.offer.conveyAnnual || 0) : 0,
+    special: c.offer ? Math.round(c.offer.specialAnnual || 0) : 0,
+    pf: 'yes',
+    esi: 'no',
+    aadhaar: '',
+    pan: '',
+    bank: '',
+    account: '',
+    ifsc: '',
+    location: '',
+    present_address: '',
+    permanent_address: '',
+    city: '',
+    state: '',
+    photo: null,
+    docs: c.resume ? [{ id: uid('doc'), name: c.resume.name, data: c.resume.data, uploadedAt: new Date().toISOString() }] : [],
+    createdAt: now,
+    updatedAt: now,
+    password
+  };
+  STORE.employees = STORE.employees || [];
+  STORE.employees.push(emp);
+  // mark candidate hired
+  c.hired = true;
+  c.stage = 'Hired';
+  saveStore();
+  cand_renderList();
+  emp_renderList(); // refresh employee table
+  logActivity(`Candidate hired: ${c.name} → employee ${code}`);
+  cand_showToast(`Candidate hired. Employee code: ${code} • Password: ${password}`);
+  // show employee modal
+  emp_showMessage(`Employee created: ${emp.fullname} (Code: ${emp.code}) — Password: ${password}`);
+}
+
+/* --- edit candidate (open form prefilled) --- */
+function cand_edit(id){
+  if(SESSION.role !== 'admin') return alert('Admin required');
+  const c = cand_find(id);
+  if(!c) return alert('Candidate not found');
+  cand_openForm(id);
+  document.getElementById('c_name').value = c.name || '';
+  document.getElementById('c_phone').value = c.phone || '';
+  document.getElementById('c_email').value = c.email || '';
+  document.getElementById('c_position').value = c.position || '';
+  document.getElementById('c_source').value = c.source || '';
+  document.getElementById('c_expected_salary').value = c.expectedSalary || '';
+  document.getElementById('c_notes').value = c.notes || '';
+  document.getElementById('candSaveBtn').dataset.edit = id;
+}
+
+/* --- export candidates to Excel --- */
+function cand_exportExcel(){
+  const rows = (STORE.candidates||[]).map(c => ({ Name: c.name, Email: c.email, Phone: c.phone, Position: c.position, Stage: c.stage, Expected: c.expectedSalary }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
+  XLSX.writeFile(wb, 'Candidates.xlsx');
+}
+
+/* --- send offer (placeholder to simulate sending) --- */
+function cand_sendOfferEmail(id){
+  const c = cand_find(id);
+  if(!c || !c.offer) return alert('Offer missing');
+  c.offer.status = 'Offer Sent';
+  c.stage = 'Offer Generated';
+  saveStore();
+  cand_renderList();
+  logActivity(`Offer emailed to ${c.name}`);
+  cand_showToast('Offer marked Sent (simulate email)');
+}
+
+/* --- expose functions globally --- */
+window.cand_openForm = cand_openForm;
+window.cand_cancel = cand_cancel;
+window.cand_save = cand_save;
+window.cand_renderList = cand_renderList;
+window.cand_view = cand_view;
+window.cand_edit = cand_edit;
+window.cand_nextStagePrompt = cand_nextStagePrompt;
+window.cand_reject = cand_reject;
+window.cand_generateOfferModal = cand_generateOfferModal;
+window.cand_generateOffer = cand_generateOffer;
+window.cand_viewOffer = cand_viewOffer;
+window.cand_sendOffer = cand_sendOffer;
+window.cand_hire = cand_hire;
+window.cand_exportExcel = cand_exportExcel;
+
+/* --- initialize render --- */
+(function cand_init(){ STORE.candidates = STORE.candidates || []; cand_renderList(); }());
+
+/* ===========================
+   END PART 3
    =========================== */
 
 
