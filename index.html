@@ -672,8 +672,82 @@
 <!-- ========== END LETTERS MODULE ========== -->
 
 
+<!-- ========== PART 8: ID CARD ENGINE + EMPLOYEE SELF-SERVICE PORTAL (ESS) ========== -->
+<!-- ID CARD VIEW -->
+<div id="idcardView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">ID Card Generator</div>
+        <div class="mini muted">Premium vertical ID card • Gradient header • QR (Code + Name)</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn primary" onclick="id_openGenerator()">Generate ID Card</button>
+        <button class="btn ghost" onclick="id_bulkGenerateAll()">Bulk Generate HTML</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; display:flex;gap:12px; align-items:center;">
+      <select id="id_emp_select" class="field small" style="min-width:260px;"></select>
+      <input id="id_file_name" class="field small" placeholder="Custom file name (optional)" />
+      <button class="btn ghost" onclick="id_preview()">Preview</button>
+      <button class="btn ghost" onclick="id_downloadPdf()">Download PDF</button>
+      <button class="btn ghost" onclick="id_downloadHtml()">Download Profile HTML</button>
+    </div>
+
+    <div id="idPreviewWrap" style="margin-top:16px;"></div>
+
+    <div style="margin-top:12px" class="section">
+      <div style="font-weight:800">Generated ID Cards</div>
+      <div class="mini muted">Use "Bulk Generate HTML" to create individual HTML files for employees (for GitHub Pages)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ESS (Employee Self Service) VIEW -->
+<div id="essView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Employee Portal (ESS)</div>
+        <div class="mini muted">Profile, Attendance, Leaves, Payroll, Letters, ID Card</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="mini muted">Employee login (code)</span>
+        <input id="ess_login_code" class="field small" placeholder="Employee code (e.g., EMP123)" />
+        <input id="ess_login_pass" type="password" class="field small" placeholder="Password" />
+        <button class="btn primary" onclick="ess_login()">Sign In</button>
+        <button class="btn ghost" onclick="ess_logout()">Sign Out</button>
+      </div>
+    </div>
+
+    <div id="essContent" style="margin-top:12px;display:none;">
+      <div style="display:flex;gap:12px;">
+        <div style="width:260px;">
+          <div id="essProfileCard" class="card" style="padding:12px;"></div>
+          <div style="margin-top:12px;">
+            <button class="btn ghost" onclick="ess_view('profile')">Profile</button>
+            <button class="btn ghost" onclick="ess_view('attendance')">Attendance</button>
+            <button class="btn ghost" onclick="ess_view('leaves')">Leaves</button>
+            <button class="btn ghost" onclick="ess_view('payroll')">Payroll</button>
+            <button class="btn ghost" onclick="ess_view('letters')">Letters</button>
+            <button class="btn ghost" onclick="ess_view('idcard')">ID Card</button>
+          </div>
+        </div>
+
+        <div style="flex:1;">
+          <div id="essMainPane" class="section"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<!-- ========== END PART 8 ========== -->
 
 
+
+      
       
       <!-- Documents placeholder -->
       <div id="documentsView" style="display:none;">
@@ -683,13 +757,7 @@
         </div>
       </div>
 
-      <!-- ID cards placeholder -->
-      <div id="idcardsView" style="display:none;">
-        <div class="section">
-          <div class="section-title">ID Cards</div>
-          <div class="mini muted">ID card generator coming in Part 8 (vertical premium design)</div>
-        </div>
-      </div>
+  
 
     
 
@@ -3790,6 +3858,410 @@ HR`
 /* ===========================
    END PART 7
    =========================== */
+/* ===========================
+   PART 8: ID CARD ENGINE + ESS
+   - Gradient: G1 (Blue → Cyan → Purple)
+   - QR: Code + Name (Google Chart QR)
+   - ESS Features: E1 E2 E3 E4 E5 E6 E8 E9
+   Dependencies: STORE, SESSION, saveStore(), uid(), emp_find(), emp_renderList(), logActivity(), escapeHtml(), html2canvas, jspdf, letters_generateEmployeeHtml()
+   =========================== */
+
+(function(){
+  // Config
+  const ID_GRADIENT = 'linear-gradient(135deg,#3b82f6,#06b6d4,#7c3aed)'; // G1 Blue→Cyan→Purple
+  const QR_SIZE = 180;
+  const ESS_ALLOWED = ['profile','attendance','leaves','payroll','letters','idcard'];
+
+  /* ------------------------
+     Helpers
+     ------------------------ */
+  function id_populateEmployeeSelect(){
+    const sel = document.getElementById('id_emp_select');
+    if(!sel) return;
+    sel.innerHTML = '<option value="">-- Select Employee --</option>' + (STORE.employees||[]).map(e => `<option value="${e.id}">${escapeHtml(e.fullname || e.email)} (${escapeHtml(e.code||'')})</option>`).join('');
+    // default to first
+    if(sel.options.length > 1) sel.selectedIndex = 1;
+  }
+
+  function id_getSelectedEmployee(){
+    const sel = document.getElementById('id_emp_select');
+    if(!sel) return null;
+    const id = sel.value;
+    if(!id) return null;
+    return emp_find(id);
+  }
+
+  /* ------------------------
+     Build vertical ID card DOM for an employee
+     Returns DOM element (not attached)
+     ------------------------ */
+  function id_buildCardNode(emp){
+    const code = emp.code || emp.id || '';
+    const name = emp.fullname || emp.email || '';
+    const designation = emp.designation || '';
+    const dept = emp.department || '';
+    const photo = emp.photo || '';
+    const qrText = `${code} | ${name}`; // Q2
+    // Google Chart QR URL
+    const qrUrl = 'https://chart.googleapis.com/chart?chs=' + QR_SIZE + 'x' + QR_SIZE + '&cht=qr&chl=' + encodeURIComponent(qrText) + '&choe=UTF-8';
+
+    const card = document.createElement('div');
+    card.style.width = '320px';
+    card.style.borderRadius = '14px';
+    card.style.overflow = 'hidden';
+    card.style.background = 'white';
+    card.style.boxShadow = '0 12px 30px rgba(2,6,23,0.18)';
+    card.style.fontFamily = 'Segoe UI, Arial, sans-serif';
+    card.innerHTML = `
+      <div style="background:${ID_GRADIENT}; padding:18px; display:flex;flex-direction:column;align-items:center;">
+        <div style="width:120px;height:120px;border-radius:14px;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;">
+          <img src="${photo}" onerror="this.style.display='none'" style="width:100%;height:100%;object-fit:cover"/>
+        </div>
+        <div style="margin-top:10px;color:white;font-weight:800;font-size:16px">${escapeHtml(name)}</div>
+        <div style="color:rgba(255,255,255,0.9);font-size:13px">${escapeHtml(designation)}</div>
+      </div>
+      <div style="padding:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:800">${escapeHtml(code)}</div>
+            <div class="mini muted">${escapeHtml(dept)}</div>
+          </div>
+          <div style="text-align:center">
+            <img src="${qrUrl}" style="width:84px;height:84px;object-fit:contain;border-radius:6px;background:#fff;padding:6px" alt="QR"/>
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:#444">
+          <div><strong>Joining:</strong> ${escapeHtml(emp.doj || '')}</div>
+          <div style="margin-top:6px"><strong>Phone:</strong> ${escapeHtml(emp.phone || '')}</div>
+        </div>
+      </div>
+      <div style="padding:10px;background:#fafafa;text-align:center;font-size:12px;color:#666">Konarak Food & Beverages</div>
+    `;
+    return card;
+  }
+
+  /* ------------------------
+     Preview ID card in page
+     ------------------------ */
+  function id_preview(){
+    const emp = id_getSelectedEmployee();
+    const wrap = document.getElementById('idPreviewWrap');
+    wrap.innerHTML = '';
+    if(!emp) { wrap.innerHTML = '<div class="mini muted">Select an employee to preview</div>'; return; }
+    const card = id_buildCardNode(emp);
+    wrap.appendChild(card);
+  }
+
+  /* ------------------------
+     Download ID card as PDF (single)
+     ------------------------ */
+  async function id_downloadPdf(){
+    const emp = id_getSelectedEmployee();
+    if(!emp) return alert('Select an employee');
+    const fname = (document.getElementById('id_file_name').value || `${emp.code || emp.id}_ID`).replace(/\s+/g,'_') + '.pdf';
+    const node = id_buildCardNode(emp);
+    // make white background for canvas
+    node.style.background = '#fff';
+    document.body.appendChild(node);
+    const canvas = await html2canvas(node, { scale: 2 });
+    const img = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', format: [420, 600] }); // vertical card size
+    const pageW = pdf.internal.pageSize.getWidth();
+    pdf.addImage(img, 'PNG', 20, 20, pageW - 40, 0);
+    pdf.save(fname);
+    document.body.removeChild(node);
+    logActivity(`ID card PDF generated for ${emp.fullname}`);
+  }
+
+  /* ------------------------
+     Download standalone HTML for the selected employee (for GitHub pages)
+     This is similar to letters_generateEmployeeHtml but produces ID card page
+     ------------------------ */
+  function id_downloadHtml(){
+    const emp = id_getSelectedEmployee();
+    if(!emp) return alert('Select an employee');
+    const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>${escapeHtml(emp.fullname)} — ID Card</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;background:#f3f6fb;padding:20px}
+.card{max-width:360px;margin:20px auto;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(2,6,23,0.12);background:#fff}
+.header{padding:18px;background:${ID_GRADIENT};color:#fff;text-align:center}
+.photo{width:120px;height:120px;margin:0 auto;border-radius:12px;overflow:hidden;background:#fff}
+.photo img{width:100%;height:100%;object-fit:cover}
+.content{padding:14px}
+.small{font-size:13px;color:#666}
+.qr{width:88px;height:88px;border-radius:8px;padding:6px;background:#fff}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="photo"><img src="${emp.photo || ''}" onerror="this.style.display='none'"/></div>
+      <h2 style="margin:10px 0 0 0">${escapeHtml(emp.fullname)}</h2>
+      <div style="margin-top:6px;font-weight:600">${escapeHtml(emp.designation || '')}</div>
+    </div>
+    <div class="content">
+      <div><strong>Code:</strong> ${escapeHtml(emp.code || '')}</div>
+      <div class="small"><strong>Dept:</strong> ${escapeHtml(emp.department || '')}</div>
+      <div class="small"><strong>Joining:</strong> ${escapeHtml(emp.doj || '')}</div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="small"><strong>Phone:</strong> ${escapeHtml(emp.phone||'')}</div>
+        </div>
+        <div><img class="qr" src="https://chart.googleapis.com/chart?chs=${QR_SIZE}x${QR_SIZE}&cht=qr&chl=${encodeURIComponent((emp.code||'') + ' | ' + (emp.fullname||''))}&choe=UTF-8" alt="QR"></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fname = `${(emp.code||emp.id||'EMP')}_idcard.html`.replace(/\s+/g,'_');
+    a.href = url; a.download = fname; a.click();
+    URL.revokeObjectURL(url);
+    logActivity(`ID HTML generated for ${emp.fullname}`);
+  }
+
+  /* ------------------------
+     Bulk generate standalone HTML for all employees (for GitHub upload)
+     Downloads a single zip is not supported client-only easily; we'll trigger multiple downloads sequentially
+     ------------------------ */
+  async function id_bulkGenerateAll(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const emps = STORE.employees || [];
+    if(emps.length === 0) return alert('No employees found');
+    for(const emp of emps){
+      // reuse the download function by programmatically selecting
+      const prev = document.getElementById('id_emp_select').value;
+      document.getElementById('id_emp_select').value = emp.id;
+      id_downloadHtml();
+      await new Promise(r=>setTimeout(r, 250)); // small gap so browser handles downloads
+      document.getElementById('id_emp_select').value = prev;
+    }
+    alert(`Generated HTML files for ${emps.length} employees (check your downloads).`);
+  }
+
+  /* ------------------------
+     ESS: Login & session for employee (simple local signin using employee.code and employee.password)
+     - On success show ESS UI
+     ------------------------ */
+  function ess_login(){
+    const code = (document.getElementById('ess_login_code').value || '').trim();
+    const pass = (document.getElementById('ess_login_pass').value || '').trim();
+    if(!code || !pass) return alert('Enter credentials');
+    const emp = (STORE.employees||[]).find(e => (e.code||'').toLowerCase() === code.toLowerCase());
+    if(!emp) return alert('Employee not found');
+    if(emp.password !== pass) return alert('Invalid password'); // passwords stored in clear (client-side)
+    // set SESSION object for employee
+    SESSION = { role: 'employee', user: { id: emp.id, fullname: emp.fullname, email: emp.email } };
+    saveSession();
+    ess_renderProfileCard(emp);
+    document.getElementById('essContent').style.display = 'block';
+    ess_view('profile');
+    logActivity(`Employee signed in: ${emp.fullname}`);
+    alert(`Welcome ${emp.fullname}`);
+  }
+
+  function ess_logout(){
+    SESSION = null;
+    saveSession();
+    document.getElementById('essContent').style.display = 'none';
+    document.getElementById('essMainPane').innerHTML = '';
+    alert('Signed out');
+  }
+
+  /* small helper to persist SESSION (localStorage key used in your app may differ) */
+  function saveSession(){
+    try{ localStorage.setItem('SESSION', JSON.stringify(SESSION)); } catch(e){}
+  }
+  function loadSession(){
+    try{ const s = localStorage.getItem('SESSION'); if(s) SESSION = JSON.parse(s); } catch(e){}
+  }
+  loadSession();
+  if(SESSION && SESSION.role === 'employee'){
+    // if user is already signed in, show ESS content
+    document.getElementById('essContent') && (document.getElementById('essContent').style.display = 'block');
+    const emp = emp_find(SESSION.user.id);
+    emp && ess_renderProfileCard(emp);
+    ess_view('profile');
+  }
+
+  /* ------------------------
+     ESS: render small profile card in sidebar
+     ------------------------ */
+  function ess_renderProfileCard(emp){
+    const wrap = document.getElementById('essProfileCard');
+    if(!wrap) return;
+    wrap.innerHTML = `<div style="display:flex;gap:12px;align-items:center;">
+      <div style="width:64px;height:64px;border-radius:8px;overflow:hidden;background:#fff"><img src="${emp.photo||''}" onerror="this.style.display='none'" style="width:100%;height:100%;object-fit:cover"/></div>
+      <div>
+        <div style="font-weight:800">${escapeHtml(emp.fullname)}</div>
+        <div class="mini muted">${escapeHtml(emp.designation || '')}</div>
+        <div class="mini muted">Code: ${escapeHtml(emp.code || '')}</div>
+      </div>
+    </div>
+    <div style="margin-top:8px" class="mini muted">Email: ${escapeHtml(emp.email||'')}</div>
+    <div class="mini muted">Phone: ${escapeHtml(emp.phone||'')}</div>`;
+  }
+
+  /* ------------------------
+     ESS: main pane view router
+     ------------------------ */
+  function ess_view(view){
+    if(!ESS_ALLOWED.includes(view)) return;
+    const pane = document.getElementById('essMainPane');
+    pane.innerHTML = '';
+    const emp = emp_find(SESSION.user.id);
+    if(!emp) { pane.innerHTML = '<div class="mini muted">Employee record missing</div>'; return; }
+    if(view === 'profile') {
+      pane.innerHTML = `<div style="display:flex;gap:12px;align-items:center;">
+        <div style="width:120px;height:120px;border-radius:8px;overflow:hidden;background:#fff"><img src="${emp.photo || ''}" onerror="this.style.display='none'" style="width:100%;height:100%;object-fit:cover"/></div>
+        <div style="flex:1">
+          <h3 style="margin:0">${escapeHtml(emp.fullname)}</h3>
+          <div class="mini muted">${escapeHtml(emp.designation || '')} • ${escapeHtml(emp.department || '')}</div>
+          <div style="margin-top:8px"><strong>Code:</strong> ${escapeHtml(emp.code || '')}</div>
+          <div class="mini muted">DOJ: ${escapeHtml(emp.doj || '')}</div>
+          <div style="margin-top:8px"><strong>Bank:</strong> ${escapeHtml(emp.bank || '')} • <strong>A/C:</strong> ${escapeHtml(emp.account || '')}</div>
+          <div style="margin-top:8px"><button class="btn ghost" onclick="letters_generateEmployeeHtml('${emp.id}')">Download Profile HTML</button><button class="btn ghost" onclick="id_downloadHtml()">Download ID HTML</button></div>
+        </div>
+      </div>`;
+    } else if(view === 'attendance'){
+      // render read-only attendance calendar for employee
+      const selDate = new Date().toISOString().slice(0,10);
+      // reuse attendance data from STORE.attendance
+      let html = `<div style="font-weight:800">Attendance (This Month)</div><div style="margin-top:8px">`;
+      const today = new Date();
+      const year = today.getFullYear(), month = today.getMonth();
+      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">`;
+      for(let d=1; d<= new Date(year, month+1, 0).getDate(); d++){
+        const key = new Date(year, month, d).toISOString().slice(0,10);
+        const rec = (STORE.attendance||[]).find(r=> r.employeeId === emp.id && r.date === key);
+        let cls = 'mini muted';
+        let mark = d;
+        if(rec){
+          if(rec.status === 'Leave' || rec.leaveType) { cls = 'mini'; mark = `<span style="background:#f6e05e;padding:6px;border-radius:6px">${d}</span>`; }
+          else if(rec.checkIn) { cls = 'mini'; mark = `<span style="background:#a7f3d0;padding:6px;border-radius:6px">${d}</span>`; }
+        } else if([0].includes(new Date(year, month, d).getDay())) {
+          // Sunday weekly off
+          mark = `<span class="mini muted">${d}</span>`;
+        } else {
+          mark = `<span style="color:#f87171">${d}</span>`;
+        }
+        html += `<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;margin:4px">${mark}</div>`;
+      }
+      html += `</div></div>`;
+      pane.innerHTML = html;
+    } else if(view === 'leaves'){
+      // list employee leaves
+      const list = (STORE.leaves||[]).filter(l=> l.employeeId === emp.id).sort((a,b)=> new Date(b.appliedAt)-new Date(a.appliedAt));
+      let html = `<div style="font-weight:800">My Leaves</div><div style="margin-top:8px"><button class="btn primary" onclick="leave_openApply()">Apply Leave</button></div><div style="margin-top:8px">`;
+      if(list.length===0) html += '<div class="mini muted">No leaves applied</div>';
+      else {
+        html += `<table style="width:100%;border-collapse:collapse"><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th></tr></thead><tbody>`;
+        list.forEach(l=> html += `<tr><td>${escapeHtml((leave_getType && leave_getType(l.type) || {}).name||l.type)}</td><td>${escapeHtml(l.from)}</td><td>${escapeHtml(l.to)}</td><td>${l.days}</td><td>${escapeHtml(l.status)}</td></tr>`);
+        html += `</tbody></table>`;
+      }
+      html += `</div>`;
+      pane.innerHTML = html;
+    } else if(view === 'payroll'){
+      const pays = (STORE.payroll||[]).filter(p=> p.employeeId === emp.id).sort((a,b)=> b.generatedAt.localeCompare(a.generatedAt));
+      let html = `<div style="font-weight:800">Payroll</div><div style="margin-top:8px">`;
+      if(pays.length === 0) html += '<div class="mini muted">No payslips found</div>';
+      else {
+        html += `<table style="width:100%;border-collapse:collapse"><thead><tr><th>Month</th><th>Gross</th><th>Net</th><th>Action</th></tr></thead><tbody>`;
+        pays.forEach(p=> html += `<tr><td>${escapeHtml(p.month)}</td><td>${fmt(p.gross)}</td><td>${fmt(p.net)}</td><td><button class="btn ghost" onclick="pay_viewPayslip('${p.id}')">Download</button></td></tr>`);
+        html += `</tbody></table>`;
+      }
+      html += `</div>`;
+      pane.innerHTML = html;
+    } else if(view === 'letters'){
+      // show letters generated for this employee
+      const hist = (STORE.lettersHistory||[]).filter(h=> h.employeeId === emp.id).slice().reverse();
+      let html = `<div style="font-weight:800">My Letters</div><div style="margin-top:8px">`;
+      if(hist.length === 0) html += '<div class="mini muted">No letters found</div>';
+      else {
+        html += `<table style="width:100%;border-collapse:collapse"><thead><tr><th>Type</th><th>Date</th><th>Action</th></tr></thead><tbody>`;
+        hist.forEach(h=> html += `<tr><td>${escapeHtml(h.templateTitle)}</td><td>${new Date(h.date).toLocaleDateString()}</td><td><button class="btn ghost" onclick="letters_download('${h.id}')">Download</button></td></tr>`);
+        html += `</tbody></table>`;
+      }
+      html += `</div>`;
+      pane.innerHTML = html;
+    } else if(view === 'idcard'){
+      // allow download of ID card PDF and HTML
+      pane.innerHTML = `<div style="font-weight:800">My ID Card</div><div style="margin-top:8px"><button class="btn ghost" onclick="id_downloadPdf()">Download ID PDF</button><button class="btn ghost" onclick="id_downloadHtml()">Download ID HTML</button></div>`;
+    }
+  }
+
+  /* ------------------------
+     Utility: currency format used by ESS payroll view
+     ------------------------ */
+  function fmt(v){ return '₹' + Number(v || 0).toFixed(2); }
+
+  /* ------------------------
+     Integrations & exposures
+     ------------------------ */
+  window.id_openGenerator = function(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    id_populateEmployeeSelect();
+    id_preview();
+  };
+  window.id_preview = id_preview;
+  window.id_downloadPdf = id_downloadPdf;
+  window.id_downloadHtml = id_downloadHtml;
+  window.id_bulkGenerateAll = id_bulkGenerateAll;
+
+  window.ess_login = ess_login;
+  window.ess_logout = ess_logout;
+  window.ess_view = ess_view;
+  window.ess_renderProfileCard = ess_renderProfileCard;
+
+  // Helper used in Employee Leaves view inside ESS
+  window.leave_openApply = window.leave_openApply || function(){ alert('Leave apply not available'); };
+
+  // Hook into route to populate when view is opened
+  const prevRouteId = route;
+  route = function(v){
+    prevRouteId(v);
+    try{
+      if(v === 'idcard'){
+        id_populateEmployeeSelect();
+        id_preview();
+      }
+      if(v === 'ess'){
+        // prepare employee select and session handling
+        const sel = document.getElementById('id_emp_select');
+        sel && id_populateEmployeeSelect();
+        // if SESSION is employee, show ESS contents
+        if(SESSION && SESSION.role === 'employee'){
+          document.getElementById('essContent') && (document.getElementById('essContent').style.display = 'block');
+          const emp = emp_find(SESSION.user.id);
+          emp && ess_renderProfileCard(emp);
+          ess_view('profile');
+        }
+      }
+    }catch(e){ console.error('part8 route err', e); }
+  };
+
+  // If the idcard/ess view is showing (rare at load), initialize
+  if(document.getElementById('idcardView') && document.getElementById('idcardView').style.display !== 'none'){
+    id_populateEmployeeSelect(); id_preview();
+  }
+  if(document.getElementById('essView') && document.getElementById('essView').style.display !== 'none'){
+    if(SESSION && SESSION.role === 'employee'){
+      document.getElementById('essContent').style.display = 'block';
+      const emp = emp_find(SESSION.user.id);
+      emp && ess_renderProfileCard(emp);
+    }
+  }
+
+  /* ===========================
+     END PART 8
+     =========================== */
+}());
  
 
 /* ===========================
