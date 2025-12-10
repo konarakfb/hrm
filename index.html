@@ -588,14 +588,47 @@
 
 
       
-
-      <!-- Payroll placeholder -->
-      <div id="payrollView" style="display:none;">
-        <div class="section">
-          <div class="section-title">Payroll</div>
-          <div class="mini muted">Payroll module coming next (Part 6)</div>
-        </div>
+<!-- ========== PAYROLL & PAYSLIP MODULE (PART 6) ========== -->
+<div id="payrollView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Payroll</div>
+        <div class="mini muted">Run payroll • Payslip generation • Payroll register</div>
       </div>
+
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn primary" onclick="pay_openPayrollRun()">Run Payroll</button>
+        <button class="btn ghost" onclick="pay_exportRegister()">Export Register</button>
+        <button class="btn ghost" onclick="pay_viewLast()">Last Payroll</button>
+      </div>
+    </div>
+
+    <!-- payroll filters -->
+    <div style="margin-top:12px; display:flex;gap:8px;align-items:center;">
+      <select id="pay_filter_emp" class="field small">
+        <option value="">All Employees</option>
+      </select>
+      <input id="pay_filter_month" type="month" class="field small" />
+      <div style="margin-left:auto" class="mini muted">Total payroll records: <strong id="payTotal">0</strong></div>
+    </div>
+
+    <!-- payroll table -->
+    <div style="margin-top:12px;" class="section">
+      <div style="font-weight:800">Payroll Register</div>
+      <div style="margin-top:8px; overflow:auto; max-height:420px;">
+        <table>
+          <thead><tr><th>Month</th><th>Employee</th><th>Gross</th><th>Deductions</th><th>Net</th><th>Actions</th></tr></thead>
+          <tbody id="payrollTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="payDetailsWrap" style="display:none;"></div>
+  </div>
+</div>
+<!-- ========== END PAYROLL MODULE ========== -->
+
 
       <!-- Documents placeholder -->
       <div id="documentsView" style="display:none;">
@@ -2826,6 +2859,359 @@ window.cand_exportExcel = cand_exportExcel;
    END PART 5
    =========================== */
 
+/* ===========================
+   PART 6: Payroll & Payslip Engine
+   Rules chosen:
+     - OT Rate: none (D)
+     - PF: optional per-employee (PF2) -> employee.pf === 'yes'
+     - ESI: apply if gross < 21000 (ESI1)
+     - Payslip format: Premium (P3)
+   Dependencies: STORE, saveStore(), uid(), emp_find(), logActivity(), escapeHtml(), html2canvas, jspdf, XLSX
+   =========================== */
+
+(function(){
+  // Configuration constants
+  const ESI_THRESHOLD = 21000; // gross < threshold -> ESI applicable
+  const EMPLOYEE_PF_PERCENT = 0.12; // 12% employee PF if applicable
+  const EMPLOYER_PF_PERCENT = 0.12; // employer contribution
+  const ESI_EMP_PERCENT = 0.0075; // 0.75%
+  const ESI_EMPLOYER_PERCENT = 0.0325; // 3.25%
+  const DAYS_IN_MONTH = 30; // payroll day basis
+  const OT_MULTIPLIER = 0; // OT disabled (D)
+
+  /* utility: format currency */
+  function fmt(v){ return '₹' + Number(v || 0).toFixed(2); }
+
+  /* payroll: compute for a single employee and month */
+  function pay_computeForEmployee(employee, monthYYYYMM){
+    // monthYYYYMM like '2025-12'
+    const empId = employee.id;
+    // gather salary components from employee record
+    const basic = Number(employee.basic || 0);
+    const hra = Number(employee.hra || 0);
+    const convey = Number(employee.convey || 0);
+    const special = Number(employee.special || 0);
+    const bonus = Number(employee.bonus || 0);
+    const grossMonthly = basic + hra + convey + special + (bonus ? (bonus/12) : 0);
+
+    // attendance summary for that month -> compute presents, approved leaves, absent (LWP)
+    const monthStart = new Date(monthYYYYMM + '-01');
+    const month = monthStart.getMonth();
+    const year = monthStart.getFullYear();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+
+    const attendanceRecords = (STORE.attendance||[]).filter(r=>{
+      if(r.employeeId !== empId) return false;
+      const d = new Date(r.date + 'T00:00:00');
+      return d.getMonth() === month && d.getFullYear() === year;
+    });
+
+    // count presents: records with checkIn and (checkOut or hours>0) and not status 'Leave'
+    let presentDays = 0;
+    let approvedLeaveDays = 0;
+    let absentDays = 0;
+    for(let d=1; d<=daysInMonth; d++){
+      const key = new Date(year, month, d).toISOString().slice(0,10);
+      const rec = attendanceRecords.find(r=> r.date === key);
+      if(rec){
+        if(rec.status === 'Leave' || rec.leaveType) approvedLeaveDays++;
+        else if(rec.checkIn) presentDays++;
+        else absentDays++;
+      } else {
+        // no record => absent
+        absentDays++;
+      }
+    }
+
+    // leaves from STORE.leaves approved in that month for this emp
+    const leaves = (STORE.leaves||[]).filter(l => l.employeeId === empId && l.status === 'Approved');
+    let leavesInMonth = 0;
+    leaves.forEach(l=>{
+      const from = new Date(l.from + 'T00:00:00');
+      const to = new Date(l.to + 'T00:00:00');
+      // iterate overlap with month
+      for(let dt = new Date(from); dt <= to; dt.setDate(dt.getDate()+1)){
+        if(dt.getFullYear() === year && dt.getMonth() === month) leavesInMonth++;
+      }
+    });
+
+    // LWP (loss of pay) days = absentDays - approvedLeaveDays (cannot be negative)
+    const lwpDays = Math.max(0, absentDays - leavesInMonth);
+
+    // Salary per day based on grossMonthly
+    const perDay = grossMonthly / DAYS_IN_MONTH;
+    const lopDeduction = perDay * lwpDays;
+
+    // PF deduction if employee.pf === 'yes' per PF2
+    const pfEmployee = (employee.pf === 'yes') ? Math.round(basic * EMPLOYEE_PF_PERCENT) : 0;
+    const pfEmployer = (employee.pf === 'yes') ? Math.round(basic * EMPLOYER_PF_PERCENT) : 0;
+
+    // ESI applicable if grossMonthly < ESI_THRESHOLD
+    const esiEmployee = (grossMonthly < ESI_THRESHOLD) ? Math.round(grossMonthly * ESI_EMP_PERCENT) : 0;
+    const esiEmployer = (grossMonthly < ESI_THRESHOLD) ? Math.round(grossMonthly * ESI_EMPLOYER_PERCENT) : 0;
+
+    // Income tax (not implemented) → 0 by default
+    const incomeTax = 0;
+
+    // OT is disabled (per your choice D) → 0
+    const overtimePay = 0;
+
+    // Total earnings and deductions
+    const gross = grossMonthly + overtimePay;
+    const totalDeductions = Number(lopDeduction) + Number(pfEmployee) + Number(esiEmployee) + Number(incomeTax);
+    const net = Math.round((gross - totalDeductions) * 100) / 100;
+
+    // payroll record
+    const rec = {
+      id: uid('payrec'),
+      employeeId: empId,
+      employeeCode: employee.code || '',
+      employeeName: employee.fullname || '',
+      month: monthYYYYMM,
+      year,
+      monthIndex: month,
+      basic, hra, convey, special, bonusMonthly: (bonus ? (bonus/12) : 0),
+      grossMonthly,
+      presentDays,
+      approvedLeaveDays: leavesInMonth,
+      absentDays,
+      lwpDays,
+      lopDeduction,
+      pfEmployee,
+      pfEmployer,
+      esiEmployee,
+      esiEmployer,
+      incomeTax,
+      overtimePay,
+      gross,
+      totalDeductions,
+      net,
+      generatedAt: new Date().toISOString()
+    };
+    return rec;
+  }
+
+  /* Run payroll for either a single employee or all employees for a given month */
+  function pay_run(monthYYYYMM, employeeId){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    if(!monthYYYYMM) return alert('Select month');
+    STORE.payroll = STORE.payroll || [];
+    const targets = employeeId ? (STORE.employees||[]).filter(e=>e.id===employeeId) : (STORE.employees||[]);
+
+    if(targets.length === 0) return alert('No employees to process');
+
+    // remove existing payroll records for that month for the selected employees (to allow re-run)
+    STORE.payroll = (STORE.payroll||[]).filter(p => !(p.month === monthYYYYMM && (!employeeId || targets.find(t=>t.id===p.employeeId))));
+    const created = [];
+    targets.forEach(emp=>{
+      const rec = pay_computeForEmployee(emp, monthYYYYMM);
+      STORE.payroll.push(rec);
+      created.push(rec);
+      logActivity(`Payroll generated for ${rec.employeeName} (${rec.month})`);
+    });
+    saveStore();
+    pay_renderRegister();
+    alert(`Payroll run complete for ${targets.length} employee(s).`);
+    return created;
+  }
+
+  /* UI helpers: open payroll run modal */
+  function pay_openPayrollRun(){
+    if(!SESSION || SESSION.role !== 'admin') return alert('Admin only');
+    const modal = document.createElement('div'); modal.className='modal-backdrop';
+    // employee options
+    const empOptions = '<option value="">All Employees</option>' + (STORE.employees||[]).map(e => `<option value="${e.id}">${escapeHtml(e.fullname)} (${escapeHtml(e.code||'')})</option>`).join('');
+    modal.innerHTML = `<div class="modal" style="width:680px;max-width:96vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:900">Run Payroll</div><div><button class="btn ghost" id="payRunClose">Close</button></div></div>
+      <div style="margin-top:8px;">
+        <div class="mini muted">Employee (leave empty for all)</div>
+        <select id="payrun_emp" class="field small">${empOptions}</select>
+        <div style="margin-top:8px" class="mini muted">Month</div>
+        <input id="payrun_month" type="month" class="field small" value="${new Date().toISOString().slice(0,7)}" />
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn primary" id="payRunStart">Start Payroll</button>
+          <button class="btn ghost" id="payRunCancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('payRunClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('payRunCancel').addEventListener('click', ()=> modal.remove());
+    document.getElementById('payRunStart').addEventListener('click', ()=>{
+      const empId = document.getElementById('payrun_emp').value || null;
+      const month = document.getElementById('payrun_month').value;
+      if(!month) return alert('Pick a month');
+      pay_run(month, empId);
+      modal.remove();
+    });
+  }
+
+  /* Render payroll register table */
+  function pay_renderRegister(){
+    const tbody = document.getElementById('payrollTableBody');
+    tbody.innerHTML = '';
+    STORE.payroll = STORE.payroll || [];
+    const filterEmp = document.getElementById('pay_filter_emp');
+    // populate employee filter
+    if(filterEmp){
+      filterEmp.innerHTML = '<option value="">All Employees</option>' + (STORE.employees||[]).map(e=>`<option value="${e.id}">${escapeHtml(e.fullname)} (${escapeHtml(e.code||'')})</option>`).join('');
+    }
+    const selEmp = document.getElementById('pay_filter_emp').value || '';
+    const selMonth = document.getElementById('pay_filter_month').value || '';
+    let list = (STORE.payroll||[]).slice().reverse();
+    if(selEmp) list = list.filter(p=> p.employeeId === selEmp);
+    if(selMonth) list = list.filter(p=> p.month === selMonth);
+    list.forEach(p=>{
+      tbody.insertAdjacentHTML('beforeend', `<tr>
+        <td>${escapeHtml(p.month)}</td>
+        <td>${escapeHtml(p.employeeName)} (${escapeHtml(p.employeeCode)})</td>
+        <td>${fmt(p.gross)}</td>
+        <td>${fmt(p.totalDeductions)}</td>
+        <td>${fmt(p.net)}</td>
+        <td>
+          <button class="btn ghost" onclick="pay_viewPayslip('${p.id}')">View Payslip</button>
+          <button class="btn ghost" onclick="pay_downloadRecord('${p.id}')">Download JSON</button>
+        </td>
+      </tr>`);
+    });
+    document.getElementById('payTotal').innerText = (STORE.payroll||[]).length;
+  }
+
+  /* Download payroll record JSON */
+  function pay_downloadRecord(id){
+    const p = (STORE.payroll||[]).find(x=>x.id===id);
+    if(!p) return alert('Record not found');
+    const a = document.createElement('a');
+    a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(p,null,2));
+    a.download = `Payroll_${p.employeeCode}_${p.month}.json`;
+    a.click();
+  }
+
+  /* Generate payslip PDF (P3 premium) for a payroll record id */
+  async function pay_viewPayslip(payrecId){
+    const pr = (STORE.payroll||[]).find(x=>x.id===payrecId);
+    if(!pr) return alert('Payroll record not found');
+    const emp = emp_find(pr.employeeId) || {};
+    // build payslip node (premium layout)
+    const node = document.createElement('div');
+    node.style.width = '820px';
+    node.style.padding = '18px';
+    node.style.background = '#fff';
+    node.style.color = '#000';
+    node.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;gap:12px;align-items:center;">
+          <img src="logo.png" style="width:90px;height:90px;object-fit:contain" onerror="this.style.display='none'">
+          <div>
+            <div style="font-weight:900;font-size:20px">Konarak Food & Beverages</div>
+            <div style="font-size:13px;color:#666">Payslip for ${escapeHtml(pr.month)}</div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:800">${escapeHtml(pr.employeeName)}</div>
+          <div class="mini">${escapeHtml(pr.employeeCode)} • ${escapeHtml(emp.department || '')}</div>
+          <div class="mini">Pay Date: ${new Date(pr.generatedAt).toLocaleDateString()}</div>
+        </div>
+      </div>
+      <hr style="margin:12px 0;border:none;border-top:1px solid #ddd" />
+      <div style="display:flex;gap:12px;">
+        <div style="flex:1;">
+          <div style="font-weight:800;margin-bottom:6px">Earnings (Monthly)</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:6px;border:1px solid #eee">Basic</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.basic)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee">HRA</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.hra)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee">Conveyance</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.convey)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee">Special</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.special)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee">Bonus (Monthly)</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.bonusMonthly)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee"><strong>Gross</strong></td><td style="padding:6px;border:1px solid #eee"><strong>${fmt(pr.gross)}</strong></td></tr>
+          </table>
+        </div>
+        <div style="width:320px;">
+          <div style="font-weight:800;margin-bottom:6px">Deductions</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:6px;border:1px solid #eee">LWP Deduction</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.lopDeduction)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee">Employee PF</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.pfEmployee)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee">Employee ESI</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.esiEmployee)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee">Income Tax</td><td style="padding:6px;border:1px solid #eee">${fmt(pr.incomeTax)}</td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee"><strong>Total Deductions</strong></td><td style="padding:6px;border:1px solid #eee"><strong>${fmt(pr.totalDeductions)}</strong></td></tr>
+            <tr><td style="padding:6px;border:1px solid #eee"><strong>Net Pay</strong></td><td style="padding:6px;border:1px solid #eee"><strong>${fmt(pr.net)}</strong></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+        <div style="width:60%;">
+          <div class="mini muted">Working days: ${pr.presentDays + pr.approvedLeaveDays + pr.lwpDays} • Present: ${pr.presentDays} • Leave: ${pr.approvedLeaveDays} • LWP: ${pr.lwpDays}</div>
+          <div style="margin-top:8px;font-size:12px;color:#444">Employer PF Contribution: ${fmt(pr.pfEmployer)} • Employer ESI: ${fmt(pr.esiEmployer)}</div>
+        </div>
+        <div style="text-align:right;">
+          <!-- QR placeholder - simple encoded text -->
+          <div style="border:1px solid #eee;padding:8px;border-radius:6px;background:#fafafa;"><div style="font-size:12px">QR: ${escapeHtml(pr.id)}</div></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;font-size:12px;color:#666">
+        This is a computer generated payslip and does not require signature. Keep a copy for your records. For discrepancies, contact HR.
+      </div>
+    `;
+
+    // render and save PDF
+    document.body.appendChild(node);
+    const canvas = await html2canvas(node, { scale: 2 });
+    const img = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const imgW = pageW - 40;
+    pdf.addImage(img, 'PNG', 20, 20, imgW, 0);
+    pdf.save(`Payslip_${pr.employeeCode}_${pr.month}.pdf`);
+    document.body.removeChild(node);
+  }
+
+  /* Export payroll register (all months or filtered view) */
+  function pay_exportRegister(){
+    const rows = (STORE.payroll||[]).map(p => ({
+      Month: p.month, Employee: p.employeeName, Code: p.employeeCode, Gross: p.gross, Deductions: p.totalDeductions, Net: p.net
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Payroll');
+    XLSX.writeFile(wb, 'Payroll_Register.xlsx');
+  }
+
+  /* View last payroll run for quick access */
+  function pay_viewLast(){
+    const last = (STORE.payroll||[]).slice(-1)[0];
+    if(!last) return alert('No payroll runs yet');
+    pay_viewPayslip(last.id);
+  }
+
+  /* Hook into route to render register when view opened */
+  const prevRoutePay = route;
+  route = function(v){
+    prevRoutePay(v);
+    try{
+      if(v === 'payroll') pay_renderRegister();
+    }catch(e){ console.error('payroll route err', e); }
+  };
+
+  // Expose functions globally
+  window.pay_run = pay_run;
+  window.pay_openPayrollRun = pay_openPayrollRun;
+  window.pay_renderRegister = pay_renderRegister;
+  window.pay_viewPayslip = pay_viewPayslip;
+  window.pay_exportRegister = pay_exportRegister;
+  window.pay_downloadRecord = pay_downloadRecord;
+  window.pay_viewLast = pay_viewLast;
+
+  // initial render if necessary
+  if(document.getElementById('payrollView').style.display !== 'none'){
+    pay_renderRegister();
+  }
+}());
+/* ===========================
+   END PART 6
+   =========================== */
   
 
 /* ===========================
