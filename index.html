@@ -217,20 +217,156 @@
       </div>
 
       <!-- Employee central simple placeholder -->
-      <div id="employeesView" style="display:none;">
-        <div class="section">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <div class="section-title">Employee Central</div>
-              <div class="mini muted">Complete employee master will be here (Part 2)</div>
-            </div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn primary" onclick="route('recruitment')">Open Recruitment</button>
-            </div>
+    <!-- ========== EMPLOYEE CENTRAL (Replace the old employeesView block with this) ========== -->
+<div id="employeesView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Employee Central</div>
+        <div class="mini muted">Full employee master (SAP-style). Admin only: create/edit/delete employees.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn primary" onclick="emp_openForm()">+ New Employee</button>
+        <button class="btn ghost" onclick="emp_exportExcel()">Export Excel</button>
+        <button class="btn ghost" onclick="emp_exportPdfAll()">Export PDF (All)</button>
+        <button class="btn ghost" onclick="seedDemoData()">Seed Demo Data</button>
+      </div>
+    </div>
+
+    <!-- SEARCH & FILTERS -->
+    <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+      <input id="empSearch" class="field small" placeholder="Search by name,code,email,dept..." oninput="emp_renderList()" />
+      <select id="empFilterDept" class="field small" onchange="emp_renderList()">
+        <option value="">All Departments</option>
+      </select>
+      <select id="empFilterType" class="field small" onchange="emp_renderList()">
+        <option value="">All Types</option>
+        <option value="Permanent">Permanent</option>
+        <option value="Contract">Contract</option>
+      </select>
+      <div style="margin-left:auto"><span class="mini muted">Total: <strong id="empTotal">0</strong></span></div>
+    </div>
+
+    <!-- FORM (collapsible) -->
+    <div id="empFormWrap" class="section" style="margin-top:12px; display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:800" id="empFormTitle">New Employee</div>
+        <div class="mini muted">Fields marked * are required</div>
+      </div>
+
+      <div style="margin-top:10px;">
+        <!-- Row 1 -->
+        <div class="row">
+          <div class="col"><input id="f_fullname" class="field" placeholder="Full name *"></div>
+          <div style="width:220px"><input id="f_code" class="field" placeholder="Employee code (EMP...)" ></div>
+        </div>
+
+        <!-- Row 2 -->
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_email" class="field" placeholder="Email *"></div>
+          <div class="col"><input id="f_phone" class="field" placeholder="Mobile"></div>
+        </div>
+
+        <!-- Row 3 -->
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_department" class="field" placeholder="Department"></div>
+          <div class="col"><input id="f_designation" class="field" placeholder="Designation"></div>
+        </div>
+
+        <!-- Row 4 -->
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_doj" type="date" class="field" placeholder="Date of Joining"></div>
+          <div class="col"><input id="f_dob" type="date" class="field" placeholder="Date of Birth"></div>
+        </div>
+
+        <!-- Row 5 (System & Type) -->
+        <div class="row" style="margin-top:8px;">
+          <div class="col">
+            <select id="f_type" class="field">
+              <option value="Permanent">Permanent</option>
+              <option value="Contract">Contract</option>
+            </select>
           </div>
-          <div style="margin-top:12px;" id="empListPlaceholder" class="section">Employee list will appear here after Part 2 is added.</div>
+          <div class="col"><input id="f_manager" class="field" placeholder="Reporting manager (code or name)"></div>
+        </div>
+
+        <!-- Salary block -->
+        <div style="margin-top:10px; font-weight:800;">Salary & Payroll</div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_basic" type="number" class="field" placeholder="Basic salary"></div>
+          <div class="col"><input id="f_hra" type="number" class="field" placeholder="HRA"></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_convey" type="number" class="field" placeholder="Conveyance"></div>
+          <div class="col"><input id="f_special" type="number" class="field" placeholder="Special allowance"></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><label class="mini muted">PF Applicable</label><select id="f_pf" class="field small"><option value="yes">Yes</option><option value="no">No</option></select></div>
+          <div class="col"><label class="mini muted">ESI Applicable</label><select id="f_esi" class="field small"><option value="yes">Yes</option><option value="no">No</option></select></div>
+        </div>
+
+        <!-- KYC & Bank -->
+        <div style="margin-top:10px; font-weight:800;">KYC & Bank</div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_aadhaar" class="field" placeholder="Aadhaar number"></div>
+          <div class="col"><input id="f_pan" class="field" placeholder="PAN number"></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_bank" class="field" placeholder="Bank name"></div>
+          <div class="col"><input id="f_account" class="field" placeholder="Bank account number"></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_ifsc" class="field" placeholder="IFSC"></div>
+          <div class="col"><input id="f_location" class="field" placeholder="Branch / Location"></div>
+        </div>
+
+        <!-- Address -->
+        <div style="margin-top:10px; font-weight:800;">Address</div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_present" class="field" placeholder="Present address"></div>
+          <div class="col"><input id="f_permanent" class="field" placeholder="Permanent address"></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col"><input id="f_city" class="field" placeholder="City"></div>
+          <div class="col"><input id="f_state" class="field" placeholder="State"></div>
+        </div>
+
+        <!-- Photo & docs -->
+        <div style="margin-top:10px;" class="mini muted">Photo & Documents</div>
+        <div class="row" style="margin-top:6px;">
+          <div class="col"><input id="f_photo" type="file" accept="image/*" class="field small"></div>
+          <div class="col"><input id="f_docs" type="file" accept=".pdf,.jpg,.png" multiple class="field small"></div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn primary" id="empSaveBtn" onclick="emp_save()">Save employee</button>
+          <button class="btn ghost" onclick="emp_cancel()">Cancel</button>
+          <div style="margin-left:auto" class="mini muted">Password will be auto-generated and shown once.</div>
         </div>
       </div>
+    </div>
+
+    <!-- Employee list -->
+    <div id="empListWrap" class="section" style="margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:800">Employees</div>
+        <div class="mini muted">Actions: View • Edit • Delete • Export • Create login</div>
+      </div>
+
+      <div style="margin-top:8px; overflow:auto; max-height:420px;">
+        <table id="empTable">
+          <thead>
+            <tr><th>Name</th><th>Code</th><th>Dept</th><th>Desig</th><th>Phone</th><th>Salary</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="empTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ========== END EMPLOYEE CENTRAL ========== -->
+
 
       <!-- Recruitment placeholder -->
       <div id="recruitmentView" style="display:none;">
@@ -668,6 +804,472 @@ function populateInitialUIState(){
   // route home
   route('home');
 }
+
+
+/* ===========================
+   PART 2: Employee Central - Full SAP-style master
+   Paste this block BEFORE the "End of Part 1 core file" comment
+   It uses the existing STORE, saveStore(), uid(), fileToBase64(), escapeHtml(), logActivity(), requireAdmin()
+   =========================== */
+
+/* --- internal helper: get employee by id --- */
+function emp_find(id){ return (STORE.employees||[]).find(e=>e.id===id); }
+
+/* --- open form to create or edit --- */
+function emp_openForm(editId){
+  // Admin only
+  if(SESSION.role !== 'admin') return alert('Admin access required');
+  document.getElementById('empFormWrap').style.display = 'block';
+  document.getElementById('empFormTitle').innerText = editId ? 'Edit Employee' : 'New Employee';
+  // clear fields
+  const ids = ['f_fullname','f_code','f_email','f_phone','f_department','f_designation','f_doj','f_dob','f_type','f_manager','f_basic','f_hra','f_convey','f_special','f_pf','f_esi','f_aadhaar','f_pan','f_bank','f_account','f_ifsc','f_location','f_present','f_permanent','f_city','f_state'];
+  ids.forEach(i=> { const el=document.getElementById(i); if(el) el.value=''; });
+  document.getElementById('f_photo').value=''; document.getElementById('f_docs').value='';
+  // set defaults
+  document.getElementById('f_type').value = 'Permanent';
+  // store edit id on save button
+  const saveBtn = document.getElementById('empSaveBtn');
+  if(editId) saveBtn.dataset.edit = editId; else saveBtn.removeAttribute('data-edit');
+  // preload existing when editing
+  if(editId){
+    const e = emp_find(editId);
+    if(!e) return alert('Employee not found');
+    document.getElementById('f_fullname').value = e.fullname || '';
+    document.getElementById('f_code').value = e.code || '';
+    document.getElementById('f_email').value = e.email || '';
+    document.getElementById('f_phone').value = e.phone || '';
+    document.getElementById('f_department').value = e.department || '';
+    document.getElementById('f_designation').value = e.designation || '';
+    document.getElementById('f_doj').value = e.doj || '';
+    document.getElementById('f_dob').value = e.dob || '';
+    document.getElementById('f_type').value = e.type || 'Permanent';
+    document.getElementById('f_manager').value = e.manager || '';
+    document.getElementById('f_basic').value = e.basic || 0;
+    document.getElementById('f_hra').value = e.hra || 0;
+    document.getElementById('f_convey').value = e.convey || 0;
+    document.getElementById('f_special').value = e.special || 0;
+    document.getElementById('f_pf').value = e.pf || 'yes';
+    document.getElementById('f_esi').value = e.esi || 'no';
+    document.getElementById('f_aadhaar').value = e.aadhaar || '';
+    document.getElementById('f_pan').value = e.pan || '';
+    document.getElementById('f_bank').value = e.bank || '';
+    document.getElementById('f_account').value = e.account || '';
+    document.getElementById('f_ifsc').value = e.ifsc || '';
+    document.getElementById('f_location').value = e.location || '';
+    document.getElementById('f_present').value = e.present_address || '';
+    document.getElementById('f_permanent').value = e.permanent_address || '';
+    document.getElementById('f_city').value = e.city || '';
+    document.getElementById('f_state').value = e.state || '';
+  }
+  // scroll to form
+  document.getElementById('empFormWrap').scrollIntoView({behavior:'smooth'});
+}
+
+/* --- cancel form --- */
+function emp_cancel(){
+  document.getElementById('empFormWrap').style.display = 'none';
+  const saveBtn = document.getElementById('empSaveBtn'); if(saveBtn) saveBtn.removeAttribute('data-edit');
+}
+
+/* --- validate email basic --- */
+function emp_isEmailValid(e){ return /\S+@\S+\.\S+/.test(e); }
+
+/* --- generate secure password --- */
+function emp_generatePassword(){
+  const part = Math.random().toString(36).slice(-6);
+  const special = ['@','!','#','$','%'][Math.floor(Math.random()*5)];
+  return 'KF' + Math.floor(100+Math.random()*899) + part + special;
+}
+
+/* --- save employee (create/update) --- */
+async function emp_save(){
+  if(SESSION.role !== 'admin') return alert('Admin only');
+  const saveBtn = document.getElementById('empSaveBtn');
+  const editId = saveBtn && saveBtn.dataset && saveBtn.dataset.edit ? saveBtn.dataset.edit : null;
+
+  // collect fields
+  const data = {
+    fullname: document.getElementById('f_fullname').value.trim(),
+    code: document.getElementById('f_code').value.trim() || ('EMP' + Math.floor(1000 + Math.random()*8999)),
+    email: document.getElementById('f_email').value.trim(),
+    phone: document.getElementById('f_phone').value.trim(),
+    department: document.getElementById('f_department').value.trim(),
+    designation: document.getElementById('f_designation').value.trim(),
+    doj: document.getElementById('f_doj').value,
+    dob: document.getElementById('f_dob').value,
+    type: document.getElementById('f_type').value,
+    manager: document.getElementById('f_manager').value.trim(),
+    basic: Number(document.getElementById('f_basic').value || 0),
+    hra: Number(document.getElementById('f_hra').value || 0),
+    convey: Number(document.getElementById('f_convey').value || 0),
+    special: Number(document.getElementById('f_special').value || 0),
+    pf: document.getElementById('f_pf').value,
+    esi: document.getElementById('f_esi').value,
+    aadhaar: document.getElementById('f_aadhaar').value.trim(),
+    pan: document.getElementById('f_pan').value.trim(),
+    bank: document.getElementById('f_bank').value.trim(),
+    account: document.getElementById('f_account').value.trim(),
+    ifsc: document.getElementById('f_ifsc').value.trim(),
+    location: document.getElementById('f_location').value.trim(),
+    present_address: document.getElementById('f_present').value.trim(),
+    permanent_address: document.getElementById('f_permanent').value.trim(),
+    city: document.getElementById('f_city').value.trim(),
+    state: document.getElementById('f_state').value.trim()
+  };
+
+  // basic validation
+  if(!data.fullname) return alert('Full name required');
+  if(!data.email || !emp_isEmailValid(data.email)) return alert('Valid email required');
+
+  // duplicate checks (code/email)
+  const dupCode = (STORE.employees||[]).find(e => e.code === data.code && (!editId || e.id !== editId));
+  if(dupCode) return alert('Employee code already exists');
+  const dupEmail = (STORE.employees||[]).find(e => e.email === data.email && (!editId || e.id !== editId));
+  if(dupEmail) return alert('Employee email already exists');
+
+  // handle photo and docs
+  const photoInput = document.getElementById('f_photo');
+  if(photoInput && photoInput.files && photoInput.files[0]){
+    data.photo = await fileToBase64(photoInput.files[0]);
+  }
+
+  const docsInput = document.getElementById('f_docs');
+  data.docs = [];
+  if(docsInput && docsInput.files && docsInput.files.length){
+    for(const f of docsInput.files){
+      const b = await fileToBase64(f);
+      data.docs.push({ id: uid('doc'), name: f.name, data: b, uploadedAt: new Date().toISOString() });
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  if(editId){
+    // update
+    const idx = (STORE.employees||[]).findIndex(x=>x.id===editId);
+    if(idx === -1) return alert('Employee not found for update');
+    const prev = STORE.employees[idx];
+    // merge values, append docs if any
+    const merged = {...prev, ...data, updatedAt: now};
+    if(data.photo) merged.photo = data.photo;
+    if(data.docs && data.docs.length) merged.docs = (prev.docs||[]).concat(data.docs);
+    STORE.employees[idx] = merged;
+    saveStore();
+    emp_cancel();
+    emp_renderList();
+    emp_showMessage('Employee updated');
+    logActivity(`Employee updated: ${merged.fullname} (${merged.code})`);
+  } else {
+    // create
+    const id = uid('emp');
+    const password = emp_generatePassword();
+    const employee = {...data, id, createdAt: now, updatedAt: now, docs: data.docs || [], photo: data.photo || null, password};
+    STORE.employees.push(employee);
+    saveStore();
+    emp_cancel();
+    emp_renderList();
+    emp_showMessage(`Employee created. Password: ${password}\n(Share with employee once)`);
+    logActivity(`Employee created: ${employee.fullname} (${employee.code})`);
+  }
+  // refresh selects/filters
+  emp_buildDeptFilter();
+}
+
+/* --- show transient message (small popup using alert fallback) --- */
+function emp_showMessage(txt){
+  // simple non-blocking toast
+  try{
+    const t = document.createElement('div');
+    t.style.position='fixed'; t.style.right='20px'; t.style.bottom='20px'; t.style.background='var(--accent-strong)'; t.style.color='#001'; t.style.padding='10px 14px'; t.style.borderRadius='8px'; t.style.zIndex=9999; t.style.fontWeight=700; t.innerText = txt;
+    document.body.appendChild(t);
+    setTimeout(()=> t.remove(), 6000);
+  } catch(e){ alert(txt); }
+}
+
+/* --- render employee list table --- */
+function emp_renderList(){
+  const tbody = document.getElementById('empTableBody');
+  tbody.innerHTML = '';
+  const q = (document.getElementById('empSearch').value || '').trim().toLowerCase();
+  const deptFilter = document.getElementById('empFilterDept').value || '';
+  const typeFilter = document.getElementById('empFilterType').value || '';
+  let list = (STORE.employees||[]).slice().reverse(); // latest first
+  if(q) list = list.filter(e => (e.fullname||'').toLowerCase().includes(q) || (e.code||'').toLowerCase().includes(q) || (e.email||'').toLowerCase().includes(q) || (e.department||'').toLowerCase().includes(q));
+  if(deptFilter) list = list.filter(e=> (e.department||'') === deptFilter);
+  if(typeFilter) list = list.filter(e=> (e.type||'') === typeFilter);
+  list.forEach(e=>{
+    const salary = Number(e.basic||0) + Number(e.hra||0) + Number(e.convey||0) + Number(e.special||0);
+    tbody.insertAdjacentHTML('beforeend', `<tr>
+      <td>${escapeHtml(e.fullname||'')}</td>
+      <td>${escapeHtml(e.code||'')}</td>
+      <td>${escapeHtml(e.department||'')}</td>
+      <td>${escapeHtml(e.designation||'')}</td>
+      <td>${escapeHtml(e.phone||'')}</td>
+      <td>₹${salary.toFixed(2)}</td>
+      <td>
+        <button class="btn ghost" onclick="emp_view('${e.id}')">View</button>
+        <button class="btn ghost" onclick="emp_edit('${e.id}')">Edit</button>
+        <button class="btn ghost" onclick="emp_delete('${e.id}')">Delete</button>
+        <button class="btn ghost" onclick="emp_exportPdf('${e.id}')">Export</button>
+      </td>
+    </tr>`);
+  });
+  document.getElementById('empTotal').innerText = (STORE.employees||[]).length;
+}
+
+/* --- view employee profile (modal) --- */
+function emp_view(id){
+  const e = emp_find(id);
+  if(!e) return alert('Employee not found');
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  const html = `<div class="modal" style="width:760px;max-width:94vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-weight:900">${escapeHtml(e.fullname)} (${escapeHtml(e.code||'')})</div>
+      <div><button class="btn ghost" id="empCloseBtn">Close</button></div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:12px;">
+      <div style="width:160px;height:200px;border-radius:8px;overflow:hidden;background:rgba(255,255,255,0.02);">
+        ${e.photo ? `<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover" />` : `<div style="padding:12px" class="mini muted">No photo</div>`}
+      </div>
+      <div style="flex:1">
+        <div class="mini muted"><strong>Email:</strong> ${escapeHtml(e.email||'')}</div>
+        <div class="mini muted"><strong>Phone:</strong> ${escapeHtml(e.phone||'')}</div>
+        <div class="mini muted"><strong>Dept:</strong> ${escapeHtml(e.department||'')} • <strong>Desig:</strong> ${escapeHtml(e.designation||'')}</div>
+        <div class="mini muted"><strong>Joining:</strong> ${escapeHtml(e.doj||'')} • <strong>Type:</strong> ${escapeHtml(e.type||'')}</div>
+        <div style="margin-top:8px">
+          <button class="btn primary" onclick="emp_downloadJson('${e.id}')">Download JSON</button>
+          <button class="btn ghost" onclick="emp_exportPdf('${e.id}')">Download PDF</button>
+        </div>
+      </div>
+      <div style="width:220px">
+        <div class="mini muted"><strong>Salary</strong></div>
+        <div class="mini">Basic: ₹${Number(e.basic||0).toFixed(2)}</div>
+        <div class="mini">HRA: ₹${Number(e.hra||0).toFixed(2)}</div>
+        <div class="mini">Conveyance: ₹${Number(e.convey||0).toFixed(2)}</div>
+        <div style="margin-top:8px"><button class="btn ghost" onclick="emp_createPayslip('${e.id}')">Create Payslip</button></div>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <div style="font-weight:800;margin-bottom:6px">KYC & Bank</div>
+      <div class="mini muted">Aadhaar: ${escapeHtml(e.aadhaar||'')}</div>
+      <div class="mini muted">PAN: ${escapeHtml(e.pan||'')}</div>
+      <div class="mini muted">Bank: ${escapeHtml(e.bank||'')} / ${escapeHtml(e.account||'')} / IFSC: ${escapeHtml(e.ifsc||'')}</div>
+      <div style="margin-top:8px">
+        <div style="font-weight:800;margin-bottom:6px">Documents</div>
+        ${(e.docs || []).map(d=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.04)">${escapeHtml(d.name)}<div><button class="btn ghost" onclick="emp_downloadDoc('${e.id}','${d.id}')">Download</button></div></div>`).join('') || '<div class="mini muted">No documents</div>'}
+      </div>
+    </div>
+  </div>`;
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+  document.getElementById('empCloseBtn').addEventListener('click', ()=> modal.remove());
+}
+
+/* --- edit employee --- */
+function emp_edit(id){
+  requireAdmin(()=> {
+    emp_openForm(id);
+    // set dataset on save button
+    document.getElementById('empSaveBtn').dataset.edit = id;
+  });
+}
+
+/* --- delete employee --- */
+function emp_delete(id){
+  requireAdmin(()=> {
+    if(!confirm('Delete employee and associated records?')) return;
+    STORE.employees = (STORE.employees || []).filter(x=>x.id !== id);
+    // purge attendance, leaves, payroll pointing to this employee
+    STORE.attendance = (STORE.attendance||[]).filter(a=>a.employeeId !== id);
+    STORE.leaves = (STORE.leaves||[]).filter(l=>l.employeeId !== id);
+    STORE.payroll = (STORE.payroll||[]).filter(p=>p.employeeId !== id);
+    saveStore();
+    emp_renderList();
+    logActivity(`Employee deleted: ${id}`);
+  });
+}
+
+/* --- download employee JSON --- */
+function emp_downloadJson(id){
+  const e = emp_find(id);
+  if(!e) return alert('Not found');
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(e,null,2));
+  a.download = `${e.code||e.id}.json`;
+  a.click();
+}
+
+/* --- download employee document --- */
+function emp_downloadDoc(empId, docId){
+  const e = emp_find(empId);
+  if(!e) return alert('Employee not found');
+  const d = (e.docs||[]).find(x=>x.id===docId);
+  if(!d) return alert('Document not found');
+  const a = document.createElement('a');
+  a.href = d.data;
+  a.download = d.name;
+  a.click();
+}
+
+/* --- export single employee as PDF --- */
+async function emp_exportPdf(id){
+  const e = emp_find(id);
+  if(!e) return alert('Employee not found');
+  // build a printable node
+  const node = document.createElement('div');
+  node.style.width = '800px';
+  node.style.padding = '18px';
+  node.style.background = '#fff';
+  node.style.color = '#000';
+  node.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center;">
+      <img src="logo.png" style="width:90px;height:90px;object-fit:contain" onerror="this.style.display='none'">
+      <div>
+        <div style="font-weight:900;font-size:20px">Konarak Food & Beverages</div>
+        <div style="font-size:14px">Employee Profile</div>
+      </div>
+    </div>
+    <hr style="margin:10px 0;border:none;border-top:1px solid #ddd">
+    <div style="display:flex;gap:12px;">
+      <div style="width:160px;height:160px;border:1px solid #ddd">${e.photo ? `<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover">` : ''}</div>
+      <div style="flex:1;">
+        <div style="font-weight:800;font-size:18px">${escapeHtml(e.fullname)}</div>
+        <div class="mini">Code: ${escapeHtml(e.code||'')}</div>
+        <div class="mini">Email: ${escapeHtml(e.email||'')}</div>
+        <div class="mini">Phone: ${escapeHtml(e.phone||'')}</div>
+        <div style="margin-top:8px">
+          <div class="mini"><strong>Department:</strong> ${escapeHtml(e.department||'')}</div>
+          <div class="mini"><strong>Designation:</strong> ${escapeHtml(e.designation||'')}</div>
+          <div class="mini"><strong>Joining:</strong> ${escapeHtml(e.doj||'')}</div>
+          <div class="mini"><strong>Type:</strong> ${escapeHtml(e.type||'')}</div>
+        </div>
+      </div>
+    </div>
+    <hr style="margin:10px 0;border:none;border-top:1px solid #ddd">
+    <div>
+      <div style="font-weight:800;margin-bottom:6px">Salary & Bank</div>
+      <div class="mini">Basic: ₹${Number(e.basic||0).toFixed(2)} • HRA: ₹${Number(e.hra||0).toFixed(2)} • Convey: ₹${Number(e.convey||0).toFixed(2)}</div>
+      <div class="mini">Bank: ${escapeHtml(e.bank||'')} • A/C: ${escapeHtml(e.account||'')} • IFSC: ${escapeHtml(e.ifsc||'')}</div>
+    </div>
+  `;
+  document.body.appendChild(node);
+  const canvas = await html2canvas(node, { scale: 2 });
+  const img = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const imgW = pageW - 40;
+  pdf.addImage(img, 'PNG', 20, 20, imgW, 0);
+  pdf.save(`Employee_${e.code||e.id}.pdf`);
+  document.body.removeChild(node);
+}
+
+/* --- export all employees to Excel --- */
+function emp_exportExcel(){
+  const rows = (STORE.employees||[]).map(e => ({ Code: e.code, Name: e.fullname, Email: e.email, Dept: e.department, Desig: e.designation, Basic: e.basic }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Employees');
+  XLSX.writeFile(wb, 'Employees.xlsx');
+}
+
+/* --- export pdf for all (simple concatenation) --- */
+async function emp_exportPdfAll(){
+  const all = STORE.employees || [];
+  if(all.length === 0) return alert('No employees');
+  // For each employee create a small pdf page and combine (simple sequential saves to multiple PDFs is heavy)
+  // We'll create a single PDF with pages appended
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+  for(let i=0;i<all.length;i++){
+    const e=all[i];
+    const node = document.createElement('div');
+    node.style.width='800px'; node.style.padding='18px'; node.style.background='#fff'; node.style.color='#000';
+    node.innerHTML = `<div style="font-weight:800;font-size:18px">${escapeHtml(e.fullname)} — ${escapeHtml(e.code||'')}</div>
+      <div class="mini">Email: ${escapeHtml(e.email||'')} • Dept: ${escapeHtml(e.department||'')}</div>
+      <div style="margin-top:8px">Basic: ₹${Number(e.basic||0).toFixed(2)}</div>`;
+    document.body.appendChild(node);
+    // render
+    // eslint-disable-next-line no-await-in-loop
+    const canvas = await html2canvas(node, { scale: 2 });
+    const img = canvas.toDataURL('image/png');
+    const w = pdf.internal.pageSize.getWidth() - 40;
+    if(i>0) pdf.addPage();
+    pdf.addImage(img, 'PNG', 20, 20, w, 0);
+    document.body.removeChild(node);
+  }
+  pdf.save('Employees_All.pdf');
+}
+
+/* --- create payslip for employee (basic) --- */
+function emp_createPayslip(empId){
+  const e = emp_find(empId);
+  if(!e) return alert('Employee not found');
+  // simple net calculation (similar to Part1 payroll)
+  const basic = Number(e.basic||0);
+  const hra = Number(e.hra||0);
+  const conv = Number(e.convey||0);
+  const special = Number(e.special||0);
+  const gross = basic + hra + conv + special;
+  const pf = e.pf === 'yes' ? Math.round(basic*0.12) : 0;
+  const net = gross - pf;
+  const rec = { id: uid('pay'), employeeId: empId, month: new Date().toISOString().slice(0,7), basic, hra, conv, special, gross, pf, net, generatedAt: new Date().toISOString() };
+  STORE.payroll = STORE.payroll || [];
+  STORE.payroll.push(rec);
+  saveStore();
+  emp_showMessage('Payslip created (Payroll record saved)');
+  logActivity(`Payslip created for ${e.fullname}`);
+}
+
+/* --- build department filter options --- */
+function emp_buildDeptFilter(){
+  const sel = document.getElementById('empFilterDept');
+  if(!sel) return;
+  const depts = Array.from(new Set((STORE.employees||[]).map(e => e.department).filter(Boolean)));
+  sel.innerHTML = '<option value="">All Departments</option>' + depts.map(d=>`<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+}
+
+/* --- create employee login page (not creating files — creates credentials only) --- */
+function emp_generateLoginCredentials(empId){
+  const e = emp_find(empId);
+  if(!e) return alert('Employee not found');
+  // set or reset password
+  const pwd = emp_generatePassword();
+  e.password = pwd;
+  saveStore();
+  emp_showMessage(`Password set for ${e.fullname}: ${pwd}`);
+  logActivity(`Password generated for ${e.code}`);
+  // NOTE: you'll need to distribute the password to the employee securely
+}
+
+/* initial render hook */
+(function emp_init(){
+  emp_buildDeptFilter();
+  emp_renderList();
+}());
+
+/* expose some functions to global for button onclicks */
+window.emp_openForm = emp_openForm;
+window.emp_cancel = emp_cancel;
+window.emp_save = emp_save;
+window.emp_renderList = emp_renderList;
+window.emp_view = emp_view;
+window.emp_edit = emp_edit;
+window.emp_delete = emp_delete;
+window.emp_exportPdf = emp_exportPdf;
+window.emp_exportExcel = emp_exportExcel;
+window.emp_exportPdfAll = emp_exportPdfAll;
+window.emp_createPayslip = emp_createPayslip;
+window.emp_downloadJson = emp_downloadJson;
+window.emp_generateLoginCredentials = emp_generateLoginCredentials;
+
+/* ===========================
+   End PART 2 code block
+   =========================== */
+
+
+  
 
 /* ===========================
    End of Part 1 core file
