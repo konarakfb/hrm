@@ -464,12 +464,76 @@
 
 
       <!-- Attendance placeholder -->
-      <div id="attendanceView" style="display:none;">
-        <div class="section">
-          <div class="section-title">Attendance</div>
-          <div class="mini muted">Attendance module coming next (Part 4). Methods: Web IN/OUT + Auto + Manual</div>
+   <!-- ========== ATTENDANCE MODULE (PART 4) ========== -->
+<div id="attendanceView" style="display:none;">
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="section-title">Attendance</div>
+        <div class="mini muted">Check-In / Check-Out • Calendar + Table • Admin manual entries</div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div id="attendanceAdminControls" style="display:none;">
+          <label class="mini muted">Employee</label>
+          <select id="attendanceEmpSelect" class="field small"></select>
+        </div>
+
+        <button class="btn ghost" onclick="att_toggleView()">Switch View</button>
+        <button class="btn ghost" onclick="att_exportExcel()">Export Excel</button>
+        <button class="btn ghost" onclick="att_exportPdf()">Export PDF</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; display:flex; gap:12px; align-items:center;">
+      <div id="attControlsLeft" style="display:flex;gap:8px;align-items:center;">
+        <div id="attCheckWrap">
+          <button class="btn primary" id="btnCheckIn" onclick="att_checkIn()">Check In</button>
+          <button class="btn ghost" id="btnCheckOut" onclick="att_checkOut()">Check Out</button>
         </div>
       </div>
+
+      <div style="margin-left:auto; display:flex; gap:10px; align-items:center;">
+        <div class="mini muted">Selected Date</div>
+        <input id="attSelectedDate" type="date" class="field small" onchange="att_renderAll()" />
+      </div>
+    </div>
+
+    <!-- Calendar + Table container -->
+    <div id="attViewWrap" style="margin-top:12px;">
+      <!-- Calendar header -->
+      <div id="attCalendar" class="section" style="display:block;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:800">Attendance Calendar</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn ghost" onclick="att_prevMonth()">◀</button>
+            <div id="attMonthLabel" class="mini muted">Month</div>
+            <button class="btn ghost" onclick="att_nextMonth()">▶</button>
+          </div>
+        </div>
+        <div id="attCalendarGrid" style="margin-top:12px;"></div>
+      </div>
+
+      <!-- Table view -->
+      <div id="attTable" class="section" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:800">Attendance Table</div>
+          <div class="mini muted">Date | In | Out | Hours | Late | Early | OT | Status</div>
+        </div>
+        <div style="margin-top:8px; overflow:auto; max-height:440px;">
+          <table id="attTableBodyTable">
+            <thead><tr><th>Date</th><th>Employee</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Late</th><th>Early</th><th>OT</th><th>Note</th><th>Actions</th></tr></thead>
+            <tbody id="attTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual entry modal placeholder (created dynamically) -->
+  </div>
+</div>
+<!-- ========== END ATTENDANCE MODULE ========== -->
+
 
       <!-- Payroll placeholder -->
       <div id="payrollView" style="display:none;">
@@ -1889,6 +1953,448 @@ window.cand_exportExcel = cand_exportExcel;
    END PART 3
    =========================== */
 
+/* ===========================
+   PART 4: Attendance Module
+   - Local time only (no mandatory geo)
+   - View: Calendar + Table
+   - Late: after 09:15 (L2)
+   - Daily required hours: 8
+   - Auto-close dangling check-ins at 18:00 on page load
+   =========================== */
+
+(function(){
+  // Configuration (based on your choices)
+  const LATE_AFTER = { hour:9, minute:15 }; // L2
+  const REQUIRED_HOURS = 8; // H8
+  const AUTO_CHECKOUT_HOUR = 18; // 18:00 auto checkout
+  const WEEKLY_OFF = [0]; // Sunday as weekly off (0=Sunday)
+
+  // Internal state for this module
+  let att_state = {
+    view: 'calendar', // or 'table'
+    curYear: new Date().getFullYear(),
+    curMonth: new Date().getMonth() // 0-indexed
+  };
+
+  /* -------------------------
+     Helper date/time utilities
+     ------------------------- */
+  function toDateKey(d){ // d: Date or ISO string or y-m-d
+    const dt = (d instanceof Date) ? d : new Date(d);
+    return dt.toISOString().slice(0,10); // YYYY-MM-DD
+  }
+  function nowTimeStr(){ const d=new Date(); return d.toTimeString().slice(0,8); } // HH:MM:SS
+  function timeToMinutes(t){ // "HH:MM:SS" or "HH:MM"
+    if(!t) return 0;
+    const parts = t.split(':').map(Number);
+    return parts[0]*60 + (parts[1]||0);
+  }
+  function minutesToHhMm(m){
+    const h = Math.floor(m/60); const mm = m % 60;
+    return `${h}:${mm.toString().padStart(2,'0')}`;
+  }
+  function computeHours(inT, outT){
+    if(!inT || !outT) return 0;
+    const mins = timeToMinutes(outT) - timeToMinutes(inT);
+    return Math.max(0, Math.round((mins/60) * 100)/100); // hours with 2 decimals
+  }
+
+  /* -------------------------
+     Store access helpers
+     ------------------------- */
+  function att_getRecordsForDate(dateKey){
+    STORE.attendance = STORE.attendance || [];
+    return STORE.attendance.filter(a=>a.date === dateKey);
+  }
+  function att_getRecord(employeeId, dateKey){
+    STORE.attendance = STORE.attendance || [];
+    return STORE.attendance.find(r=> r.employeeId === employeeId && r.date === dateKey);
+  }
+  function att_saveRecord(rec){
+    STORE.attendance = STORE.attendance || [];
+    const idx = STORE.attendance.findIndex(r=> r.id === rec.id);
+    if(idx === -1) STORE.attendance.push(rec); else STORE.attendance[idx] = rec;
+    saveStore();
+  }
+
+  /* -------------------------
+     Auto-close dangling check-ins at 18:00 (run on init)
+     ------------------------- */
+  function att_autoCloseDangling(){
+    const todayKey = toDateKey(new Date());
+    const now = new Date();
+    STORE.attendance = STORE.attendance || [];
+    let changed = false;
+    STORE.attendance.forEach(rec=>{
+      // if no checkOut and same-day and checkIn exists and date <= today
+      if(rec.checkIn && !rec.checkOut){
+        const recDate = new Date(rec.date + 'T00:00:00');
+        // auto close only for past dates or today after AUTO_CHECKOUT_HOUR
+        const shouldClose = (toDateKey(recDate) < todayKey) || (toDateKey(recDate) === todayKey && now.getHours() >= AUTO_CHECKOUT_HOUR);
+        if(shouldClose){
+          rec.checkOut = `${AUTO_CHECKOUT_HOUR}:00:00`;
+          rec.hours = computeHours(rec.checkIn, rec.checkOut);
+          rec.overtime = Math.max(0, Math.round((rec.hours - REQUIRED_HOURS)*100)/100);
+          rec.earlyExit = rec.hours < REQUIRED_HOURS;
+          rec.late = timeToMinutes(rec.checkIn) > (LATE_AFTER.hour*60 + LATE_AFTER.minute);
+          rec.updatedAt = new Date().toISOString();
+          changed = true;
+        }
+      }
+    });
+    if(changed) { saveStore(); logActivity('Auto-checked out dangling attendance entries'); }
+  }
+
+  /* -------------------------
+     UI wiring & rendering
+     ------------------------- */
+  function att_initUI(){
+    // Show admin controls if admin
+    const adminControls = document.getElementById('attendanceAdminControls');
+    const empSelect = document.getElementById('attendanceEmpSelect');
+    if(SESSION && SESSION.role === 'admin') {
+      adminControls.style.display = 'block';
+      // populate employees
+      empSelect.innerHTML = '<option value="">-- Select Employee --</option>' + (STORE.employees||[]).map(e=>`<option value="${e.id}">${escapeHtml(e.fullname || e.email)} (${escapeHtml(e.code||'')})</option>`).join('');
+      // default selection
+      if(empSelect.options.length>1) empSelect.selectedIndex = 1;
+    } else {
+      adminControls.style.display = 'none';
+    }
+    // selected date default = today
+    document.getElementById('attSelectedDate').value = new Date().toISOString().slice(0,10);
+    // init month label
+    att_state.curYear = new Date().getFullYear();
+    att_state.curMonth = new Date().getMonth();
+    att_renderAll();
+  }
+
+  function att_toggleView(){
+    att_state.view = att_state.view === 'calendar' ? 'table' : 'calendar';
+    document.getElementById('attCalendar').style.display = att_state.view === 'calendar' ? 'block' : 'none';
+    document.getElementById('attTable').style.display = att_state.view === 'table' ? 'block' : 'none';
+    att_renderAll();
+  }
+
+  /* Month navigation */
+  function att_prevMonth(){ att_state.curMonth--; if(att_state.curMonth<0){ att_state.curMonth=11; att_state.curYear--; } att_renderCalendar(); }
+  function att_nextMonth(){ att_state.curMonth++; if(att_state.curMonth>11){ att_state.curMonth=0; att_state.curYear++; } att_renderCalendar(); }
+
+  /* Render both calendar + table */
+  function att_renderAll(){
+    emp_renderList && emp_renderList(); // refresh employee list if available
+    att_renderCalendar();
+    att_renderTable();
+    // manage button state
+    att_updateCheckButtons();
+  }
+
+  function att_updateCheckButtons(){
+    // If employee logged in, show check-in/out buttons; else if admin, show manual functions
+    const btnIn = document.getElementById('btnCheckIn');
+    const btnOut = document.getElementById('btnCheckOut');
+    if(SESSION && SESSION.role === 'employee'){
+      btnIn.style.display = 'inline-block';
+      btnOut.style.display = 'inline-block';
+    } else if(SESSION && SESSION.role === 'admin'){
+      // admin can choose employee in select
+      btnIn.style.display = 'inline-block';
+      btnOut.style.display = 'inline-block';
+    } else {
+      btnIn.style.display = 'none'; btnOut.style.display = 'none';
+    }
+  }
+
+  /* Calendar rendering: simple month grid */
+  function att_renderCalendar(){
+    const grid = document.getElementById('attCalendarGrid');
+    grid.innerHTML = '';
+    const year = att_state.curYear;
+    const month = att_state.curMonth;
+    const first = new Date(year, month, 1);
+    const startDay = first.getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    // header days
+    const header = document.createElement('div');
+    header.style.display='grid'; header.style.gridTemplateColumns='repeat(7,1fr)'; header.style.gap='6px';
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>{ const h=document.createElement('div'); h.className='mini muted'; h.style.textAlign='center'; h.innerText=d; header.appendChild(h); });
+    grid.appendChild(header);
+    // cells
+    const cells = document.createElement('div');
+    cells.style.display='grid'; cells.style.gridTemplateColumns='repeat(7,1fr)'; cells.style.gap='8px'; cells.style.marginTop='8px';
+    // blanks
+    for(let i=0;i<startDay;i++){
+      const blank=document.createElement('div'); blank.style.minHeight='70px'; blank.style.background='transparent'; cells.appendChild(blank);
+    }
+    for(let d=1; d<=daysInMonth; d++){
+      const dt = new Date(year, month, d);
+      const key = toDateKey(dt);
+      const cell = document.createElement('div');
+      cell.style.minHeight='70px'; cell.style.borderRadius='8px'; cell.style.padding='8px'; cell.style.background='var(--card)';
+      // find attendance for date
+      const recs = att_getRecordsForDate(key);
+      // simple status priority: Hired employees present - we color if selected employee present
+      const todayKey = new Date().toISOString().slice(0,10);
+      const isToday = (key === todayKey);
+      let cellInner = `<div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-weight:800">${d}</div><div class="mini muted">${new Date(year,month,d).toLocaleDateString(undefined,{weekday:'short'})}</div></div>`;
+      // list present counts
+      if(recs.length>0){
+        // compute counts of present
+        const presentCount = recs.filter(r=>r.checkIn).length;
+        const lateCount = recs.filter(r=>r.late).length;
+        cellInner += `<div class="mini" style="margin-top:6px">Present: ${presentCount}</div>`;
+        if(lateCount) cellInner += `<div class="mini" style="color:var(--accent-strong)">Late: ${lateCount}</div>`;
+      } else {
+        // if weekend/holiday mark muted
+        if(WEEKLY_OFF.includes(dt.getDay())) cellInner += `<div class="mini muted" style="margin-top:6px">Weekly off</div>`;
+      }
+      cell.innerHTML = cellInner;
+      if(isToday){ cell.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)'; }
+      cells.appendChild(cell);
+    }
+    grid.appendChild(cells);
+    // month label
+    const label = document.getElementById('attMonthLabel');
+    const mname = new Date(year, month, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' });
+    label.innerText = mname;
+  }
+
+  /* Table rendering */
+  function att_renderTable(){
+    const tbody = document.getElementById('attTableBody');
+    tbody.innerHTML = '';
+    const selDate = document.getElementById('attSelectedDate').value || new Date().toISOString().slice(0,10);
+    const records = (STORE.attendance||[]).filter(r=> r.date === selDate);
+    // if admin and employee selected, filter by that employee
+    const empSelect = document.getElementById('attendanceEmpSelect');
+    const selectedEmp = empSelect && empSelect.value ? empSelect.value : null;
+    const list = records.filter(r => !selectedEmp || r.employeeId === selectedEmp);
+    // show for all employees if admin; for employee user show own
+    let rows = list;
+    // sort by time
+    rows.sort((a,b)=> (a.checkIn||'') < (b.checkIn||'') ? -1 : 1);
+    rows.forEach(r=>{
+      const e = emp_find(r.employeeId) || { fullname: r.employeeName || '—', code: r.employeeCode || '' };
+      tbody.insertAdjacentHTML('beforeend', `<tr>
+        <td>${escapeHtml(r.date)}</td>
+        <td>${escapeHtml(e.fullname || '')} ${escapeHtml(e.code||'')}</td>
+        <td>${escapeHtml(r.checkIn || '-')}</td>
+        <td>${escapeHtml(r.checkOut || '-')}</td>
+        <td>${r.hours !== undefined ? Number(r.hours).toFixed(2) : '-'}</td>
+        <td>${r.late ? 'Yes' : 'No'}</td>
+        <td>${r.earlyExit ? 'Yes' : 'No'}</td>
+        <td>${r.overtime || 0}</td>
+        <td>${escapeHtml(r.note || '')}</td>
+        <td>
+          <button class="btn ghost" onclick="att_editRecord('${r.id}')">Edit</button>
+        </td>
+      </tr>`);
+    });
+  }
+
+  /* -------------------------
+     Check-in / Check-out functions (web)
+     ------------------------- */
+  function att_getActiveEmployeeForAction(){
+    if(SESSION && SESSION.role === 'employee') return SESSION.user.id;
+    if(SESSION && SESSION.role === 'admin'){
+      const sel = document.getElementById('attendanceEmpSelect');
+      if(sel && sel.value) return sel.value;
+      return null;
+    }
+    return null;
+  }
+
+  function att_checkIn(){
+    const empId = att_getActiveEmployeeForAction();
+    if(!empId) return alert('Select employee (admin) or sign in as employee to check-in.');
+    const dateKey = document.getElementById('attSelectedDate').value || new Date().toISOString().slice(0,10);
+    let rec = att_getRecord(empId, dateKey);
+    const timeNow = nowTimeStr();
+    if(rec && rec.checkIn){
+      return alert('Already checked in for this date.');
+    }
+    if(!rec){
+      const e = emp_find(empId) || {};
+      rec = {
+        id: uid('att'),
+        employeeId: empId,
+        employeeName: e.fullname || e.email || '',
+        employeeCode: e.code || '',
+        date: dateKey,
+        checkIn: timeNow,
+        checkOut: null,
+        hours: null,
+        late: timeToMinutes(timeNow) > (LATE_AFTER.hour*60 + LATE_AFTER.minute),
+        earlyExit: false,
+        overtime: 0,
+        note: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      rec.checkIn = timeNow;
+      rec.late = timeToMinutes(timeNow) > (LATE_AFTER.hour*60 + LATE_AFTER.minute);
+      rec.updatedAt = new Date().toISOString();
+    }
+    att_saveRecord(rec);
+    att_renderAll();
+    logActivity(`Check-in: ${rec.employeeName} (${rec.employeeCode}) on ${rec.date} at ${rec.checkIn}`);
+    alert(`Checked in at ${rec.checkIn}`);
+  }
+
+  function att_checkOut(){
+    const empId = att_getActiveEmployeeForAction();
+    if(!empId) return alert('Select employee (admin) or sign in as employee to check-out.');
+    const dateKey = document.getElementById('attSelectedDate').value || new Date().toISOString().slice(0,10);
+    let rec = att_getRecord(empId, dateKey);
+    const timeNow = nowTimeStr();
+    if(!rec || !rec.checkIn){
+      return alert('No check-in found for today. If employee was present, admin can add manual entry.');
+    }
+    if(rec.checkOut){
+      return alert('Already checked out for this date.');
+    }
+    rec.checkOut = timeNow;
+    rec.hours = computeHours(rec.checkIn, rec.checkOut);
+    rec.overtime = Math.max(0, Math.round((rec.hours - REQUIRED_HOURS)*100)/100);
+    rec.earlyExit = rec.hours < REQUIRED_HOURS;
+    rec.late = rec.late || (timeToMinutes(rec.checkIn) > (LATE_AFTER.hour*60 + LATE_AFTER.minute));
+    rec.updatedAt = new Date().toISOString();
+    att_saveRecord(rec);
+    att_renderAll();
+    logActivity(`Check-out: ${rec.employeeName} (${rec.employeeCode}) on ${rec.date} at ${rec.checkOut}`);
+    alert(`Checked out at ${rec.checkOut} (Hours: ${rec.hours})`);
+  }
+
+  /* -------------------------
+     Admin: edit record (modal)
+     ------------------------- */
+  function att_editRecord(id){
+    if(SESSION.role !== 'admin') return alert('Admin only');
+    const rec = (STORE.attendance||[]).find(r=>r.id===id);
+    if(!rec) return alert('Record not found');
+    // build modal
+    const modal = document.createElement('div'); modal.className='modal-backdrop';
+    modal.innerHTML = `<div class="modal" style="width:560px;max-width:94vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-weight:900">Edit Attendance — ${escapeHtml(rec.employeeName || '')} (${escapeHtml(rec.employeeCode||'')})</div>
+        <div><button class="btn ghost" id="attEditClose">Close</button></div>
+      </div>
+      <div style="margin-top:8px;">
+        <div class="mini muted">Date</div>
+        <input id="att_edit_date" type="date" class="field small" value="${escapeHtml(rec.date)}" />
+        <div class="mini muted" style="margin-top:8px">Check In</div>
+        <input id="att_edit_in" class="field small" value="${escapeHtml(rec.checkIn||'')}" placeholder="HH:MM:SS" />
+        <div class="mini muted" style="margin-top:8px">Check Out</div>
+        <input id="att_edit_out" class="field small" value="${escapeHtml(rec.checkOut||'')}" placeholder="HH:MM:SS" />
+        <div class="mini muted" style="margin-top:8px">Note</div>
+        <input id="att_edit_note" class="field small" value="${escapeHtml(rec.note||'')}" />
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn primary" id="attEditSave">Save</button>
+          <button class="btn ghost" id="attEditCancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('attEditClose').addEventListener('click', ()=> modal.remove());
+    document.getElementById('attEditCancel').addEventListener('click', ()=> modal.remove());
+    document.getElementById('attEditSave').addEventListener('click', ()=>{
+      const newDate = document.getElementById('att_edit_date').value;
+      const newIn = document.getElementById('att_edit_in').value;
+      const newOut = document.getElementById('att_edit_out').value;
+      const note = document.getElementById('att_edit_note').value;
+      rec.date = newDate;
+      rec.checkIn = newIn || null;
+      rec.checkOut = newOut || null;
+      rec.hours = rec.checkIn && rec.checkOut ? computeHours(rec.checkIn, rec.checkOut) : (rec.checkIn && !rec.checkOut ? 0 : rec.hours);
+      rec.late = rec.checkIn ? (timeToMinutes(rec.checkIn) > (LATE_AFTER.hour*60 + LATE_AFTER.minute)) : false;
+      rec.earlyExit = rec.hours ? rec.hours < REQUIRED_HOURS : false;
+      rec.overtime = rec.hours ? Math.max(0, Math.round((rec.hours - REQUIRED_HOURS)*100)/100) : 0;
+      rec.note = note;
+      rec.updatedAt = new Date().toISOString();
+      saveStore();
+      modal.remove();
+      att_renderAll();
+      logActivity(`Attendance record edited: ${rec.employeeName} (${rec.date})`);
+      alert('Attendance updated');
+    });
+  }
+
+  /* -------------------------
+     Export functions (Excel & PDF)
+     ------------------------- */
+  function att_exportExcel(){
+    const selDate = document.getElementById('attSelectedDate').value || new Date().toISOString().slice(0,10);
+    const records = (STORE.attendance||[]).filter(r=> r.date === selDate);
+    const rows = records.map(r => ({ Date: r.date, Employee: r.employeeName, Code: r.employeeCode, CheckIn: r.checkIn || '-', CheckOut: r.checkOut || '-', Hours: r.hours || 0, Late: r.late ? 'Yes' : 'No', EarlyExit: r.earlyExit ? 'Yes' : 'No', OT: r.overtime || 0 }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    XLSX.writeFile(wb, `Attendance_${selDate}.xlsx`);
+  }
+
+  async function att_exportPdf(){
+    // build printable table for selected date
+    const selDate = document.getElementById('attSelectedDate').value || new Date().toISOString().slice(0,10);
+    const rows = (STORE.attendance||[]).filter(r=> r.date === selDate);
+    const node = document.createElement('div');
+    node.style.width='800px'; node.style.padding='18px'; node.style.background='#fff'; node.style.color='#000';
+    node.innerHTML = `<div style="font-weight:900;font-size:18px">Konarak Food & Beverages — Attendance ${selDate}</div><div style="margin-top:8px">Generated: ${new Date().toLocaleString()}</div>`;
+    let html = `<table style="width:100%;border-collapse:collapse;margin-top:8px;"><thead><tr><th style="border:1px solid #ddd;padding:6px">Employee</th><th style="border:1px solid #ddd;padding:6px">Check In</th><th style="border:1px solid #ddd;padding:6px">Check Out</th><th style="border:1px solid #ddd;padding:6px">Hours</th><th style="border:1px solid #ddd;padding:6px">Late</th><th style="border:1px solid #ddd;padding:6px">OT</th></tr></thead><tbody>`;
+    rows.forEach(r => { html += `<tr><td style="border:1px solid #eee;padding:6px">${escapeHtml(r.employeeName)}</td><td style="border:1px solid #eee;padding:6px">${escapeHtml(r.checkIn||'-')}</td><td style="border:1px solid #eee;padding:6px">${escapeHtml(r.checkOut||'-')}</td><td style="border:1px solid #eee;padding:6px">${r.hours||0}</td><td style="border:1px solid #eee;padding:6px">${r.late? 'Yes':'No'}</td><td style="border:1px solid #eee;padding:6px">${r.overtime||0}</td></tr>`; });
+    html += `</tbody></table>`;
+    node.innerHTML += html;
+    document.body.appendChild(node);
+    const canvas = await html2canvas(node, { scale: 2 });
+    const img = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const imgW = pageW - 40;
+    pdf.addImage(img, 'PNG', 20, 20, imgW, 0);
+    pdf.save(`Attendance_${selDate}.pdf`);
+    document.body.removeChild(node);
+  }
+
+  /* -------------------------
+     Initialization & hooks
+     ------------------------- */
+  // auto-close dangling entries once
+  att_autoCloseDangling();
+
+  // expose functions globally used by HTML
+  window.att_toggleView = att_toggleView;
+  window.att_prevMonth = att_prevMonth;
+  window.att_nextMonth = att_nextMonth;
+  window.att_checkIn = att_checkIn;
+  window.att_checkOut = att_checkOut;
+  window.att_renderAll = att_renderAll;
+  window.att_exportExcel = att_exportExcel;
+  window.att_exportPdf = att_exportPdf;
+  window.att_editRecord = att_editRecord;
+
+  // initialize UI when Attendance view opened by route
+  const origRoute = route;
+  // wrap route to hook attendance view display (safe: route is defined in Part1)
+  route = function(v){
+    origRoute(v);
+    try{
+      if(v === 'attendance'){
+        att_initUI();
+      }
+    }catch(e){ console.error('att route err', e); }
+  };
+
+  // If already on attendance view, init now
+  if(document.getElementById('attendanceView').style.display !== 'none'){
+    att_initUI();
+  }
+
+}());
+/* ===========================
+   END PART 4
+   =========================== */
 
   
 
